@@ -9,8 +9,15 @@ interface GroundingChunk {
   source_url: string;
 }
 
+export interface SlideEvaluation {
+  slide_number: number;
+  grounded: boolean;
+  reason: string;
+}
+
 interface GroundingOptions {
   generateSlide: (slide: Slide, chunks: GroundingChunk[]) => Promise<Slide>;
+  evaluateSlides: (slides: Slide[], chunks: GroundingChunk[]) => Promise<SlideEvaluation[]>;
   maxAttempts?: number;
 }
 
@@ -20,7 +27,7 @@ interface GroundingResult {
   slidesFailedGrounding: number;
 }
 
-function isSlideGrounded(slide: Slide, chunkUrls: Set<string>): boolean {
+function hasMatchingUrl(slide: Slide, chunkUrls: Set<string>): boolean {
   return slide.sources.length > 0 && slide.sources.some((s) => chunkUrls.has(s));
 }
 
@@ -29,19 +36,45 @@ export async function checkAndRegenerate(
   chunks: GroundingChunk[],
   options: GroundingOptions
 ): Promise<GroundingResult> {
-  const { generateSlide, maxAttempts = 2 } = options;
+  const { generateSlide, evaluateSlides, maxAttempts = 2 } = options;
   const chunkUrls = new Set(chunks.map((c) => c.source_url));
 
   let currentSlides = [...deck.slides];
   let iterations = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const failingIndices: number[] = [];
+    // Fast pre-filter: slides without any matching URL are automatically ungrounded
+    const urlFailIndices = new Set<number>();
+    const candidateSlides: Slide[] = [];
+    const candidateIndices: number[] = [];
+
     for (let i = 0; i < currentSlides.length; i++) {
-      if (!isSlideGrounded(currentSlides[i], chunkUrls)) {
-        failingIndices.push(i);
+      if (!hasMatchingUrl(currentSlides[i], chunkUrls)) {
+        urlFailIndices.add(i);
+      } else {
+        candidateSlides.push(currentSlides[i]);
+        candidateIndices.push(i);
       }
     }
+
+    // LLM faithfulness evaluation on slides that pass the URL check
+    const llmFailIndices = new Set<number>();
+    if (candidateSlides.length > 0) {
+      const evaluations = await evaluateSlides(candidateSlides, chunks);
+      for (const ev of evaluations) {
+        if (!ev.grounded) {
+          const idx = candidateIndices.find(
+            (i) => currentSlides[i].slide_number === ev.slide_number
+          );
+          if (idx !== undefined) llmFailIndices.add(idx);
+        }
+      }
+    }
+
+    const failingIndices = [
+      ...Array.from(urlFailIndices),
+      ...Array.from(llmFailIndices),
+    ].sort((a, b) => a - b);
 
     if (failingIndices.length === 0) break;
 
@@ -64,10 +97,34 @@ export async function checkAndRegenerate(
     }
   }
 
-  // Final grounding check and status assignment
+  // Final evaluation for status assignment
   let slidesFailedGrounding = 0;
-  const finalSlides = currentSlides.map((slide) => {
-    const grounded = isSlideGrounded(slide, chunkUrls);
+  const groundedSet = new Set<number>();
+
+  // URL pre-filter
+  const finalCandidates: Slide[] = [];
+  const finalCandidateIndices: number[] = [];
+  for (let i = 0; i < currentSlides.length; i++) {
+    if (hasMatchingUrl(currentSlides[i], chunkUrls)) {
+      finalCandidates.push(currentSlides[i]);
+      finalCandidateIndices.push(i);
+    }
+  }
+
+  if (finalCandidates.length > 0) {
+    const evaluations = await evaluateSlides(finalCandidates, chunks);
+    for (const ev of evaluations) {
+      if (ev.grounded) {
+        const idx = finalCandidateIndices.find(
+          (i) => currentSlides[i].slide_number === ev.slide_number
+        );
+        if (idx !== undefined) groundedSet.add(idx);
+      }
+    }
+  }
+
+  const finalSlides = currentSlides.map((slide, i) => {
+    const grounded = groundedSet.has(i);
     if (!grounded) slidesFailedGrounding++;
     return {
       ...slide,

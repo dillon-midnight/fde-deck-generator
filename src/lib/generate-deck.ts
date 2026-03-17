@@ -5,7 +5,7 @@ import { SignalsSchema, SlideSchema, type Signals, type Deck, type Slide } from 
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
 import { vectorSearch } from "./rag";
-import { checkAndRegenerate } from "./grounding";
+import { checkAndRegenerate, type SlideEvaluation } from "./grounding";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { sql } from "./db";
 import { trace, SpanStatusCode } from "@opentelemetry/api";
@@ -106,6 +106,24 @@ export async function generateDeck(
           maxOutputTokens: 1024,
         });
         return regenSlide!;
+      },
+      evaluateSlides: async (slides: Slide[], evalChunks) => {
+        const { output } = await generateText({
+          model: gateway("anthropic/claude-sonnet-4-6"),
+          output: Output.object({
+            schema: z.object({
+              evaluations: z.array(z.object({
+                slide_number: z.number(),
+                grounded: z.boolean(),
+                reason: z.string(),
+              })),
+            }),
+          }),
+          system: "You are a faithfulness evaluator. Evaluate whether each slide's talking_points and features are supported by the source chunk content. A slide is grounded if its claims are substantiated by the chunk text, not just if it references a valid URL.",
+          prompt: `Evaluate each slide for faithfulness against the source chunks.\n\nSlides:\n${JSON.stringify(slides, null, 2)}\n\nSource chunks:\n${evalChunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nFor each slide, return whether it is grounded (its talking_points and features are supported by the chunk content it references) and a brief reason.`,
+          maxOutputTokens: 1024,
+        });
+        return output!.evaluations;
       },
     });
     const totalSlides = groundingResult.deck.slides.length;
