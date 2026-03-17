@@ -1,4 +1,7 @@
 import type { Deck, Slide } from "./schemas";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
+
+const tracer = trace.getTracer("fde-deck-generator");
 
 interface GroundingChunk {
   id: number;
@@ -44,7 +47,22 @@ export async function checkAndRegenerate(
 
     iterations++;
     for (const idx of failingIndices) {
-      const regenerated = await generateSlide(currentSlides[idx], chunks);
+      const regenerated = await tracer.startActiveSpan("llm-regen-slide", async (span) => {
+        span.setAttributes({
+          "slide.number": currentSlides[idx].slide_number,
+          "grounding.attempt": attempt + 1,
+        });
+        try {
+          const result = await generateSlide(currentSlides[idx], chunks);
+          return result;
+        } catch (err) {
+          span.recordException(err as Error);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          throw err;
+        } finally {
+          span.end();
+        }
+      });
       currentSlides[idx] = regenerated;
     }
   }
