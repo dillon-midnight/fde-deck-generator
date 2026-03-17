@@ -37,7 +37,8 @@ export async function exportToGoogleSlides(
   );
 
   if (!createRes.ok) {
-    throw new Error(`Failed to create presentation: ${createRes.statusText}`);
+    const detail = await createRes.text().catch(() => createRes.statusText);
+    throw new Error(`Failed to create presentation: ${detail}`);
   }
 
   const presentation = await createRes.json();
@@ -108,7 +109,8 @@ export async function exportToGoogleSlides(
   );
 
   if (!batchRes.ok) {
-    throw new Error(`Failed to update presentation: ${batchRes.statusText}`);
+    const detail = await batchRes.text().catch(() => batchRes.statusText);
+    throw new Error(`Failed to update presentation: ${detail}`);
   }
 
   return `https://docs.google.com/presentation/d/${presentationId}/edit`;

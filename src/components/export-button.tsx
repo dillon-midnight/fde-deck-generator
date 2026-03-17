@@ -16,6 +16,10 @@ export function ExportButton({ deck }: ExportButtonProps) {
   const [error, setError] = useState<string | null>(null);
 
   async function handleExport() {
+    if ((session as any)?.error === "RefreshAccessTokenError") {
+      setError("Session expired. Please sign in again.");
+      return;
+    }
     const accessToken = (session as any)?.accessToken;
     if (!accessToken) {
       setError("No Google access token. Please sign in again.");
