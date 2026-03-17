@@ -4,6 +4,36 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TagInput } from "./tag-input";
 
+const PRESETS = [
+  {
+    label: "Acme Corp — Financial Services",
+    company: "Acme Corp",
+    industry: "Financial Services",
+    painPoints: ["Manual compliance reporting", "Scattered internal docs"],
+    useCases: ["AI-powered compliance search", "Automated report generation"],
+    objections: ["Data security concerns", "Regulatory risk"],
+    tools: ["Salesforce", "Confluence"],
+  },
+  {
+    label: "Globex — Healthcare",
+    company: "Globex",
+    industry: "Healthcare",
+    painPoints: ["Slow clinical trial data retrieval", "Siloed research databases"],
+    useCases: ["Cross-study search", "Evidence summarization"],
+    objections: ["HIPAA compliance", "Integration complexity"],
+    tools: ["Epic", "SharePoint"],
+  },
+  {
+    label: "Initech — Legal",
+    company: "Initech",
+    industry: "Legal",
+    painPoints: ["Time-consuming contract review", "Inconsistent clause tracking"],
+    useCases: ["AI contract analysis", "Clause library search"],
+    objections: ["Attorney-client privilege", "Accuracy requirements"],
+    tools: ["iManage", "NetDocuments"],
+  },
+];
+
 export function SignalForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -56,6 +86,40 @@ export function SignalForm() {
           {error}
         </div>
       )}
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Preset scenario</label>
+        <select
+          onChange={(e) => {
+            const idx = Number(e.target.value);
+            if (idx === -1) {
+              setCompany("");
+              setIndustry("");
+              setPainPoints([]);
+              setUseCases([]);
+              setObjections([]);
+              setTools([]);
+            } else {
+              const p = PRESETS[idx];
+              setCompany(p.company);
+              setIndustry(p.industry);
+              setPainPoints(p.painPoints);
+              setUseCases(p.useCases);
+              setObjections(p.objections);
+              setTools(p.tools);
+            }
+          }}
+          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-sm"
+          defaultValue={-1}
+        >
+          <option value={-1}>Custom</option>
+          {PRESETS.map((p, i) => (
+            <option key={i} value={i}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Company *</label>
