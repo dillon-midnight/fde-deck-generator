@@ -10,7 +10,9 @@ export function getSql() {
 }
 
 // Tagged template proxy that lazily initializes the connection
-export const sql = new Proxy({} as NeonQueryFunction<false, false>, {
+export const sql = new Proxy(
+  function () {} as unknown as NeonQueryFunction<false, false>,
+  {
   apply(_target, _thisArg, args) {
     return getSql()(...(args as [TemplateStringsArray, ...any[]]));
   },
