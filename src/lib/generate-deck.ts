@@ -60,30 +60,30 @@ export async function generateDeck(
   const userPrompt = buildUserPrompt(signals, chunks, fewShotExamples);
 
   // Generate
-  const { output } = await tracer.startActiveSpan("llm-generate-deck", async (span) => {
-    span.setAttributes({
-      "llm.model": "anthropic/claude-sonnet-4-6",
-      "llm.max_tokens": 4096,
-      "deck.company": signals.company,
-    });
-    try {
-      const result = await generateText({
-        model: gateway("anthropic/claude-sonnet-4-6"),
-        output: Output.object({ schema: z.object({ slides: z.array(SlideSchema) }) }),
-        system: systemPrompt,
-        prompt: userPrompt,
-        maxOutputTokens: 4096,
-      });
-      span.setAttribute("deck.slide_count", result.output!.slides.length);
-      return result;
-    } catch (err) {
-      span.recordException(err as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-      throw err;
-    } finally {
-      span.end();
-    }
+  const generateSpan = tracer.startSpan("llm-generate-deck");
+  generateSpan.setAttributes({
+    "llm.model": "anthropic/claude-sonnet-4-6",
+    "llm.max_tokens": 4096,
+    "deck.company": signals.company,
   });
+  let output: Awaited<ReturnType<typeof generateText>>["output"];
+  try {
+    const result = await generateText({
+      model: gateway("anthropic/claude-sonnet-4-6"),
+      output: Output.object({ schema: z.object({ slides: z.array(SlideSchema) }) }),
+      system: systemPrompt,
+      prompt: userPrompt,
+      maxOutputTokens: 4096,
+    });
+    generateSpan.setAttribute("deck.slide_count", result.output!.slides.length);
+    output = result.output;
+  } catch (err) {
+    generateSpan.recordException(err as Error);
+    generateSpan.setStatus({ code: SpanStatusCode.ERROR });
+    throw err;
+  } finally {
+    generateSpan.end();
+  }
 
   const dealId = `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let deck: Deck = {
@@ -93,39 +93,38 @@ export async function generateDeck(
   };
 
   // Grounding loop
-  const groundingResult = await tracer.startActiveSpan("llm-grounding-loop", async (span) => {
-    try {
-      const result = await checkAndRegenerate(deck, chunks, {
-        generateSlide: async (slide: Slide) => {
-          const { output: regenSlide } = await generateText({
-            model: gateway("anthropic/claude-sonnet-4-6"),
-            output: Output.object({ schema: SlideSchema }),
-            system: systemPrompt,
-            prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${chunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
-            maxOutputTokens: 1024,
-          });
-          return regenSlide!;
-        },
-      });
-      const totalSlides = result.deck.slides.length;
-      const faithfulnessRate =
-        totalSlides > 0
-          ? (totalSlides - result.slidesFailedGrounding) / totalSlides
-          : 1;
-      span.setAttributes({
-        "grounding.iterations": result.iterations,
-        "grounding.slides_failed": result.slidesFailedGrounding,
-        "grounding.faithfulness_rate": faithfulnessRate,
-      });
-      return result;
-    } catch (err) {
-      span.recordException(err as Error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-      throw err;
-    } finally {
-      span.end();
-    }
-  });
+  const groundingSpan = tracer.startSpan("llm-grounding-loop");
+  let groundingResult: Awaited<ReturnType<typeof checkAndRegenerate>>;
+  try {
+    groundingResult = await checkAndRegenerate(deck, chunks, {
+      generateSlide: async (slide: Slide) => {
+        const { output: regenSlide } = await generateText({
+          model: gateway("anthropic/claude-sonnet-4-6"),
+          output: Output.object({ schema: SlideSchema }),
+          system: systemPrompt,
+          prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${chunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
+          maxOutputTokens: 1024,
+        });
+        return regenSlide!;
+      },
+    });
+    const totalSlides = groundingResult.deck.slides.length;
+    const faithfulnessRate =
+      totalSlides > 0
+        ? (totalSlides - groundingResult.slidesFailedGrounding) / totalSlides
+        : 1;
+    groundingSpan.setAttributes({
+      "grounding.iterations": groundingResult.iterations,
+      "grounding.slides_failed": groundingResult.slidesFailedGrounding,
+      "grounding.faithfulness_rate": faithfulnessRate,
+    });
+  } catch (err) {
+    groundingSpan.recordException(err as Error);
+    groundingSpan.setStatus({ code: SpanStatusCode.ERROR });
+    throw err;
+  } finally {
+    groundingSpan.end();
+  }
 
   deck = groundingResult.deck;
 

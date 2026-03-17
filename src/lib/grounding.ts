@@ -47,23 +47,20 @@ export async function checkAndRegenerate(
 
     iterations++;
     for (const idx of failingIndices) {
-      const regenerated = await tracer.startActiveSpan("llm-regen-slide", async (span) => {
-        span.setAttributes({
-          "slide.number": currentSlides[idx].slide_number,
-          "grounding.attempt": attempt + 1,
-        });
-        try {
-          const result = await generateSlide(currentSlides[idx], chunks);
-          return result;
-        } catch (err) {
-          span.recordException(err as Error);
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          throw err;
-        } finally {
-          span.end();
-        }
+      const regenSpan = tracer.startSpan("llm-regen-slide");
+      regenSpan.setAttributes({
+        "slide.number": currentSlides[idx].slide_number,
+        "grounding.attempt": attempt + 1,
       });
-      currentSlides[idx] = regenerated;
+      try {
+        currentSlides[idx] = await generateSlide(currentSlides[idx], chunks);
+      } catch (err) {
+        regenSpan.recordException(err as Error);
+        regenSpan.setStatus({ code: SpanStatusCode.ERROR });
+        throw err;
+      } finally {
+        regenSpan.end();
+      }
     }
   }
 
