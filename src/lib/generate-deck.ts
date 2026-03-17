@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { gateway } from "@ai-sdk/gateway";
 import { SignalsSchema, type Signals, type Deck, type Slide } from "./schemas";
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
@@ -57,7 +57,7 @@ export async function generateDeck(
 
   // Generate
   const { text } = await generateText({
-    model: anthropic("claude-sonnet-4-6"),
+    model: gateway("anthropic/claude-sonnet-4-6"),
     system: systemPrompt,
     prompt: userPrompt,
     maxOutputTokens: 4096,
@@ -76,7 +76,7 @@ export async function generateDeck(
   const groundingResult = await checkAndRegenerate(deck, chunks, {
     generateSlide: async (slide: Slide) => {
       const { text: regenText } = await generateText({
-        model: anthropic("claude-sonnet-4-6"),
+        model: gateway("anthropic/claude-sonnet-4-6"),
         system: systemPrompt,
         prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${chunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
         maxOutputTokens: 1024,

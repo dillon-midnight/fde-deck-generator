@@ -19,6 +19,7 @@ const EMBED_BATCH_SIZE = 100;
 
 async function runSchema() {
   await sql`CREATE EXTENSION IF NOT EXISTS vector`;
+  await sql`DROP TABLE IF EXISTS doc_chunks`;
   await sql`CREATE TABLE IF NOT EXISTS doc_chunks (
     id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,

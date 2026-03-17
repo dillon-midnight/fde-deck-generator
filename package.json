@@ -13,8 +13,7 @@
     "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
-    "@ai-sdk/openai": "^3.0.41",
+    "@ai-sdk/gateway": "^3.0.74",
     "@neondatabase/serverless": "^1.0.2",
     "ai": "^6.0.116",
     "dotenv": "^17.3.1",
