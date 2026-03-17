@@ -1,6 +1,7 @@
-import { generateText } from "ai";
+import { generateText, Output } from "ai";
 import { gateway } from "@ai-sdk/gateway";
-import { SignalsSchema, type Signals, type Deck, type Slide } from "./schemas";
+import { z } from "zod";
+import { SignalsSchema, SlideSchema, type Signals, type Deck, type Slide } from "./schemas";
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
 import { vectorSearch } from "./rag";
@@ -56,32 +57,32 @@ export async function generateDeck(
   const userPrompt = buildUserPrompt(signals, chunks, fewShotExamples);
 
   // Generate
-  const { text } = await generateText({
+  const { output } = await generateText({
     model: gateway("anthropic/claude-sonnet-4-6"),
+    output: Output.object({ schema: z.object({ slides: z.array(SlideSchema) }) }),
     system: systemPrompt,
     prompt: userPrompt,
     maxOutputTokens: 4096,
   });
 
-  // Parse LLM output
-  const parsed = JSON.parse(text);
   const dealId = `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   let deck: Deck = {
     deal_id: dealId,
     company: signals.company,
-    slides: parsed.slides,
+    slides: output!.slides,
   };
 
   // Grounding loop
   const groundingResult = await checkAndRegenerate(deck, chunks, {
     generateSlide: async (slide: Slide) => {
-      const { text: regenText } = await generateText({
+      const { output: regenSlide } = await generateText({
         model: gateway("anthropic/claude-sonnet-4-6"),
+        output: Output.object({ schema: SlideSchema }),
         system: systemPrompt,
         prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${chunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
         maxOutputTokens: 1024,
       });
-      return JSON.parse(regenText);
+      return regenSlide!;
     },
   });
 
