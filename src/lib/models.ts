@@ -1,13 +1,15 @@
 export const GENERATION_MODEL = "anthropic/claude-sonnet-4-6";
-export const GENERATION_FALLBACKS = {
+export const GENERATION_PROVIDER_OPTIONS = {
   gateway: {
-    models: ["google/gemini-2.5-pro", "openai/gpt-4.1"],
+    zeroDataRetention: true,
+    models: ["google/gemini-2.5-pro", "mistral/mistral-large-latest"],
   },
 };
 
 export const GROUNDING_MODEL = "google/gemini-2.0-flash-lite";
-export const GROUNDING_FALLBACKS = {
+export const GROUNDING_PROVIDER_OPTIONS = {
   gateway: {
-    models: ["openai/gpt-4.1-mini", "anthropic/claude-haiku-4-5"],
+    zeroDataRetention: true,
+    models: ["anthropic/claude-haiku-4-5", "groq/llama-3.3-70b-versatile"],
   },
 };
