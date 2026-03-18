@@ -11,9 +11,9 @@ import {
 } from "./schemas";
 import {
   GENERATION_MODEL,
-  GENERATION_FALLBACKS,
+  GENERATION_PROVIDER_OPTIONS,
   GROUNDING_MODEL,
-  GROUNDING_FALLBACKS,
+  GROUNDING_PROVIDER_OPTIONS,
 } from "./models";
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
@@ -117,7 +117,7 @@ export async function generateDeckStream(
       return async (slide: Slide, _chunks: GroundingChunk[]) => {
         const { output } = await generateText({
           model: gateway(GROUNDING_MODEL),
-          providerOptions: GROUNDING_FALLBACKS,
+          providerOptions: GROUNDING_PROVIDER_OPTIONS,
           output: Output.object({
             schema: z.object({
               slide_number: z.number(),
@@ -138,7 +138,7 @@ export async function generateDeckStream(
       return async (slide: Slide, _chunks: GroundingChunk[]) => {
         const { output } = await generateText({
           model: gateway(GROUNDING_MODEL),
-          providerOptions: GROUNDING_FALLBACKS,
+          providerOptions: GROUNDING_PROVIDER_OPTIONS,
           output: Output.object({ schema: SlideSchema }),
           system: systemPrompt,
           prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${regenChunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
@@ -163,7 +163,7 @@ export async function generateDeckStream(
         try {
           const result = streamText({
             model: gateway(GENERATION_MODEL),
-            providerOptions: GENERATION_FALLBACKS,
+            providerOptions: GENERATION_PROVIDER_OPTIONS,
             output: Output.object({
               schema: z.object({ slides: z.array(SlideSchema) }),
             }),

@@ -100,13 +100,14 @@ describe("model routing", () => {
     expect(streamTextCalls[0].model).toBe("anthropic/claude-sonnet-4-6");
   });
 
-  it("passes generation fallbacks to streamText", async () => {
+  it("passes generation provider options with ZDR to streamText", async () => {
     const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
     await generateDeckStream(validSignals, "user-1", () => {});
 
     expect(streamTextCalls[0].providerOptions).toEqual({
       gateway: {
-        models: ["google/gemini-2.5-pro", "openai/gpt-4.1"],
+        zeroDataRetention: true,
+        models: ["google/gemini-2.5-pro", "mistral/mistral-large-latest"],
       },
     });
   });
@@ -118,7 +119,7 @@ describe("model routing", () => {
     expect(generateTextCalls.some((c) => c.model === "google/gemini-2.0-flash-lite")).toBe(true);
   });
 
-  it("passes grounding fallbacks to generateText", async () => {
+  it("passes grounding provider options with ZDR to generateText", async () => {
     const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
     await generateDeckStream(validSignals, "user-1", () => {});
 
@@ -127,9 +128,32 @@ describe("model routing", () => {
     for (const call of groundingCalls) {
       expect(call.providerOptions).toEqual({
         gateway: {
-          models: ["openai/gpt-4.1-mini", "anthropic/claude-haiku-4-5"],
+          zeroDataRetention: true,
+          models: ["anthropic/claude-haiku-4-5", "groq/llama-3.3-70b-versatile"],
         },
       });
+    }
+  });
+
+  it("all AI calls have zeroDataRetention enabled", async () => {
+    const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
+    await generateDeckStream(validSignals, "user-1", () => {});
+
+    for (const call of [...streamTextCalls, ...generateTextCalls]) {
+      const opts = call.providerOptions as { gateway?: { zeroDataRetention?: boolean } };
+      expect(opts?.gateway?.zeroDataRetention).toBe(true);
+    }
+  });
+
+  it("no OpenAI models in any fallback chain", async () => {
+    const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
+    await generateDeckStream(validSignals, "user-1", () => {});
+
+    for (const call of [...streamTextCalls, ...generateTextCalls]) {
+      const models = (call.providerOptions as { gateway?: { models?: string[] } })?.gateway?.models ?? [];
+      for (const model of models) {
+        expect(model).not.toMatch(/^openai\//);
+      }
     }
   });
 
@@ -158,7 +182,7 @@ describe("model routing", () => {
     for (const call of generateTextCalls) {
       const models = (call.providerOptions as { gateway?: { models?: string[] } })?.gateway?.models ?? [];
       expect(models).not.toContain("google/gemini-2.5-pro");
-      expect(models).not.toContain("openai/gpt-4.1");
+      expect(models).not.toContain("mistral/mistral-large-latest");
     }
   });
 
@@ -168,8 +192,8 @@ describe("model routing", () => {
 
     for (const call of streamTextCalls) {
       const models = (call.providerOptions as { gateway?: { models?: string[] } })?.gateway?.models ?? [];
-      expect(models).not.toContain("openai/gpt-4.1-mini");
       expect(models).not.toContain("anthropic/claude-haiku-4-5");
+      expect(models).not.toContain("groq/llama-3.3-70b-versatile");
     }
   });
 });
