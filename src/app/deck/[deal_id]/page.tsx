@@ -109,7 +109,17 @@ export default function DeckPage() {
     <div className="min-h-screen">
       <Nav />
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {loading ? (
+        {isStreamingRoute && ctx.error && !ctx.isStreaming ? (
+          <div className="text-center py-12">
+            <p className="text-red-600 mb-4">{ctx.error}</p>
+            <button
+              onClick={() => router.push("/generate")}
+              className="text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
+            >
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
           <p className="text-neutral-500">Loading deck...</p>
         ) : fetchError ? (
           <div className="text-center py-12">

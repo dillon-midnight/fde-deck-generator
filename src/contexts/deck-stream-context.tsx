@@ -88,9 +88,12 @@ export function DeckStreamProvider({ children }: { children: ReactNode }) {
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
+          if (!done) {
+            buffer += decoder.decode(value, { stream: true });
+          } else {
+            buffer += decoder.decode(); // flush decoder
+          }
           const lines = buffer.split("\n\n");
           buffer = lines.pop()!;
 
@@ -138,6 +141,8 @@ export function DeckStreamProvider({ children }: { children: ReactNode }) {
                 break;
             }
           }
+
+          if (done) break;
         }
 
         setState((s) => (s.isStreaming ? { ...s, isStreaming: false } : s));

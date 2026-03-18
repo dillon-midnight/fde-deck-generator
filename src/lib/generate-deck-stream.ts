@@ -264,24 +264,20 @@ export async function generateDeckStream(
       latency_ms: Date.now() - startTime,
     };
 
-    try {
-      await sql`
-        INSERT INTO pipeline_runs (
-          deal_id, user_id, signals, generated_deck, retrieved_chunk_ids,
-          retrieval_scores, total_slides, slides_failed_grounding,
-          faithfulness_rate, hallucination_check_iterations, latency_ms
-        ) VALUES (
-          ${pipelineRun.deal_id}, ${pipelineRun.user_id},
-          ${JSON.stringify(pipelineRun.signals)}, ${JSON.stringify(pipelineRun.generated_deck)},
-          ${pipelineRun.retrieved_chunk_ids}, ${JSON.stringify(pipelineRun.retrieval_scores)},
-          ${pipelineRun.total_slides}, ${pipelineRun.slides_failed_grounding},
-          ${pipelineRun.faithfulness_rate}, ${pipelineRun.hallucination_check_iterations},
-          ${pipelineRun.latency_ms}
-        )
-      `;
-    } catch {
-      console.error("Failed to save pipeline run");
-    }
+    await sql`
+      INSERT INTO pipeline_runs (
+        deal_id, user_id, signals, generated_deck, retrieved_chunk_ids,
+        retrieval_scores, total_slides, slides_failed_grounding,
+        faithfulness_rate, hallucination_check_iterations, latency_ms
+      ) VALUES (
+        ${pipelineRun.deal_id}, ${pipelineRun.user_id},
+        ${JSON.stringify(pipelineRun.signals)}, ${JSON.stringify(pipelineRun.generated_deck)},
+        ${pipelineRun.retrieved_chunk_ids}, ${JSON.stringify(pipelineRun.retrieval_scores)},
+        ${pipelineRun.total_slides}, ${pipelineRun.slides_failed_grounding},
+        ${pipelineRun.faithfulness_rate}, ${pipelineRun.hallucination_check_iterations},
+        ${pipelineRun.latency_ms}
+      )
+    `;
 
     emit({ type: "complete", deal_id: dealId, faithfulness_rate: faithfulnessRate });
   } catch (err) {
