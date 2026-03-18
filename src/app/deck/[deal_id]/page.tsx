@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { Nav } from "@/components/nav";
 import { DeckEditor } from "@/components/deck-editor";
+import { useDeckStreamContext } from "@/contexts/deck-stream-context";
 import type { Deck } from "@/lib/schemas";
 
 export default function DeckPage() {
@@ -12,17 +13,45 @@ export default function DeckPage() {
   const router = useRouter();
   const params = useParams();
   const dealId = params.deal_id as string;
+  const isStreamingRoute = dealId === "streaming";
 
-  const [deck, setDeck] = useState<Deck | null>(null);
-  const [evalData, setEvalData] = useState<{ ae_diff: unknown; edited_deck: Deck } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const ctx = useDeckStreamContext();
+
+  const [fetchedDeck, setFetchedDeck] = useState<Deck | null>(null);
+  const [evalData, setEvalData] = useState<{
+    ae_diff: unknown;
+    edited_deck: Deck;
+  } | null>(null);
+  const needsFetch = !isStreamingRoute && !(ctx.result?.deal_id === dealId && ctx.slides.length > 0);
+  const [fetching, setFetching] = useState(needsFetch);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/");
   }, [status, router]);
 
+  // Streaming mode: redirect to /generate if no active stream
   useEffect(() => {
+    if (!isStreamingRoute) return;
+    if (!ctx.isStreaming && ctx.slides.length === 0 && !ctx.result) {
+      router.replace("/generate");
+    }
+  }, [isStreamingRoute, ctx.isStreaming, ctx.slides.length, ctx.result, router]);
+
+  // Streaming mode: navigate to real URL when stream completes
+  useEffect(() => {
+    if (!isStreamingRoute || !ctx.result) return;
+    router.replace(`/deck/${ctx.result.deal_id}`);
+  }, [isStreamingRoute, ctx.result, router]);
+
+  // Normal mode: fetch deck from API (skip if streaming or context has the data)
+  const contextHasDeck =
+    !isStreamingRoute &&
+    ctx.result?.deal_id === dealId &&
+    ctx.slides.length > 0;
+
+  useEffect(() => {
+    if (isStreamingRoute || contextHasDeck) return;
     if (!session || !dealId) return;
 
     fetch(`/api/decks/deals/${dealId}`)
@@ -34,15 +63,15 @@ export default function DeckPage() {
         return r.json();
       })
       .then((data) => {
-        setDeck(data.deck);
+        setFetchedDeck(data.deck);
         setEvalData(data.eval);
-        setLoading(false);
+        setFetching(false);
       })
       .catch((err) => {
-        setError(err.message);
-        setLoading(false);
+        setFetchError(err.message);
+        setFetching(false);
       });
-  }, [session, dealId]);
+  }, [session, dealId, isStreamingRoute, contextHasDeck]);
 
   if (status === "loading" || !session) {
     return (
@@ -52,15 +81,39 @@ export default function DeckPage() {
     );
   }
 
+  // Derive the active deck from available sources
+  let activeDeck: Deck | null = null;
+  let loading = false;
+
+  if (isStreamingRoute) {
+    if (ctx.slides.length > 0) {
+      activeDeck = {
+        deal_id: "streaming",
+        company: ctx.company || "",
+        slides: ctx.slides,
+      };
+    }
+    // else: waiting for first slide (shown below)
+  } else if (contextHasDeck) {
+    activeDeck = {
+      deal_id: dealId,
+      company: ctx.company || "",
+      slides: ctx.slides,
+    };
+  } else {
+    activeDeck = fetchedDeck;
+    loading = fetching;
+  }
+
   return (
     <div className="min-h-screen">
       <Nav />
       <main className="max-w-4xl mx-auto px-4 py-8">
         {loading ? (
           <p className="text-neutral-500">Loading deck...</p>
-        ) : error ? (
+        ) : fetchError ? (
           <div className="text-center py-12">
-            <p className="text-red-600 mb-4">{error}</p>
+            <p className="text-red-600 mb-4">{fetchError}</p>
             <button
               onClick={() => router.push("/dashboard")}
               className="text-blue-600 hover:text-blue-700 font-medium cursor-pointer"
@@ -68,8 +121,18 @@ export default function DeckPage() {
               Back to dashboard
             </button>
           </div>
-        ) : deck ? (
-          <DeckEditor initialDeck={deck} existingEval={evalData} />
+        ) : isStreamingRoute && !activeDeck ? (
+          <div className="flex items-center gap-2 text-neutral-500">
+            <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            Waiting for first slide...
+          </div>
+        ) : activeDeck ? (
+          <DeckEditor
+            initialDeck={activeDeck}
+            existingEval={evalData}
+            isStreaming={isStreamingRoute && ctx.isStreaming}
+            stageMessage={isStreamingRoute ? ctx.stageMessage : null}
+          />
         ) : null}
       </main>
     </div>

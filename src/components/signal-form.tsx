@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TagInput } from "./tag-input";
-import { useDeckStream } from "@/hooks/use-deck-stream";
+import { useDeckStreamContext } from "@/contexts/deck-stream-context";
 
 const PRESETS = [
   {
@@ -37,8 +37,7 @@ const PRESETS = [
 
 export function SignalForm() {
   const router = useRouter();
-  const { slides, stageMessage, error, isStreaming, result, startStream } =
-    useDeckStream();
+  const { error, isStreaming, startStream } = useDeckStreamContext();
 
   const [company, setCompany] = useState("");
   const [industry, setIndustry] = useState("");
@@ -47,14 +46,23 @@ export function SignalForm() {
   const [objections, setObjections] = useState<string[]>([]);
   const [tools, setTools] = useState<string[]>([]);
 
-  // Auto-navigate on completion
-  useEffect(() => {
-    if (!result) return;
-    const timeout = setTimeout(() => {
-      router.push(`/deck/${result.deal_id}`);
-    }, 1500);
-    return () => clearTimeout(timeout);
-  }, [result, router]);
+  // If a stream is already in progress (user navigated back), show a message
+  if (isStreaming) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          Generation in progress...
+        </div>
+        <button
+          onClick={() => router.push("/deck/streaming")}
+          className="text-blue-600 hover:text-blue-700 font-medium text-sm cursor-pointer"
+        >
+          View deck in editor
+        </button>
+      </div>
+    );
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,6 +74,7 @@ export function SignalForm() {
       objections,
       tools,
     });
+    router.push("/deck/streaming");
   }
 
   return (
@@ -170,76 +179,10 @@ export function SignalForm() {
 
       <button
         type="submit"
-        disabled={isStreaming}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer"
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer"
       >
-        {isStreaming ? "Generating deck..." : "Generate deck"}
+        Generate deck
       </button>
-
-      {/* Streaming progress */}
-      {(isStreaming || slides.length > 0 || result) && (
-        <div className="mt-6 space-y-4">
-          {/* Stage indicator */}
-          {isStreaming && stageMessage && (
-            <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-              <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              {stageMessage}
-            </div>
-          )}
-
-          {/* Slide list */}
-          {slides.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                Slides ({slides.length})
-              </h3>
-              <ul className="space-y-1">
-                {slides.map((slide, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between text-sm px-3 py-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg"
-                  >
-                    <span>
-                      <span className="text-neutral-400 mr-2">{i + 1}.</span>
-                      {slide.title}
-                    </span>
-                    {slide.grounding_status === "grounded" && (
-                      <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">
-                        Grounded
-                      </span>
-                    )}
-                    {slide.grounding_status === "needs_review" && (
-                      <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded-full">
-                        Needs review
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Completion */}
-          {result && (
-            <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-sm space-y-2">
-              <p className="text-green-700 dark:text-green-300 font-medium">
-                Deck generated — {Math.round(result.faithfulness_rate * 100)}%
-                faithfulness
-              </p>
-              <p className="text-neutral-500 dark:text-neutral-400 text-xs">
-                Redirecting to deck editor...
-              </p>
-            </div>
-          )}
-        </div>
-      )}
     </form>
   );
 }
