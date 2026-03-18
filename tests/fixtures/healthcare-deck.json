@@ -1,0 +1,85 @@
+{
+  "deal_id": "deal-1710700000001-def456",
+  "company": "Globex",
+  "slides": [
+    {
+      "slide_number": 1,
+      "title": "Clinical Data Retrieval Challenges at Globex",
+      "talking_points": [
+        "Clinical trial data retrieval takes researchers hours of manual searching",
+        "Siloed research databases prevent cross-study insights"
+      ],
+      "features": ["Credal Search", "Cross-Database Search"],
+      "sources": ["https://docs.credal.ai/healthcare-search", "https://docs.credal.ai/cross-database"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 2,
+      "title": "Cross-Study Search with Credal",
+      "talking_points": [
+        "Search across multiple clinical trial databases with a single query",
+        "Semantic search understands medical terminology and synonyms",
+        "Results ranked by relevance with source provenance"
+      ],
+      "features": ["Semantic Search", "Medical NLP", "Source Provenance"],
+      "sources": ["https://docs.credal.ai/healthcare-search", "https://docs.credal.ai/semantic-search"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 3,
+      "title": "Evidence Summarization",
+      "talking_points": [
+        "Automatically summarize findings across multiple studies",
+        "Generate evidence tables with proper citations to source documents"
+      ],
+      "features": ["Summarization Engine", "Evidence Tables"],
+      "sources": ["https://docs.credal.ai/summarization"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 4,
+      "title": "HIPAA-Compliant Architecture",
+      "talking_points": [
+        "Full HIPAA compliance with BAA available",
+        "PHI is encrypted and access-controlled at every layer",
+        "Dedicated tenant isolation for healthcare customers"
+      ],
+      "features": ["HIPAA Compliance", "BAA", "Tenant Isolation"],
+      "sources": ["https://docs.credal.ai/hipaa", "https://docs.credal.ai/security"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 5,
+      "title": "Epic & SharePoint Integration",
+      "talking_points": [
+        "Native Epic FHIR connector for clinical data access",
+        "SharePoint document libraries indexed automatically"
+      ],
+      "features": ["Epic Connector", "SharePoint Connector"],
+      "sources": ["https://docs.credal.ai/integrations/epic", "https://docs.credal.ai/integrations/sharepoint"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 6,
+      "title": "Reducing Integration Complexity",
+      "talking_points": [
+        "Pre-built connectors eliminate custom integration work",
+        "Standard API with comprehensive documentation for custom workflows"
+      ],
+      "features": ["Pre-Built Connectors", "REST API"],
+      "sources": ["https://docs.credal.ai/integrations", "https://docs.credal.ai/api"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 7,
+      "title": "Proposed Pilot & Next Steps",
+      "talking_points": [
+        "4-week pilot focused on a single research team and two study databases",
+        "Success metrics: search time reduction, researcher satisfaction"
+      ],
+      "features": ["Pilot Program", "Analytics Dashboard"],
+      "sources": ["https://docs.credal.ai/implementation", "https://docs.credal.ai/analytics"],
+      "grounding_status": "grounded"
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "deal_id": "deal-1710700000000-abc123",
+  "company": "Acme Corp",
+  "slides": [
+    {
+      "slide_number": 1,
+      "title": "The Compliance Challenge at Acme Corp",
+      "talking_points": [
+        "Manual compliance reporting consumes 40+ hours per quarter across teams",
+        "Scattered internal docs create inconsistency in audit preparation"
+      ],
+      "features": ["Credal Search", "Document Indexing"],
+      "sources": ["https://docs.credal.ai/compliance-search", "https://docs.credal.ai/document-indexing"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 2,
+      "title": "AI-Powered Compliance Search",
+      "talking_points": [
+        "Credal Search enables natural language queries across all compliance documents",
+        "Results are grounded in source documents with full citation trails",
+        "Role-based access controls ensure only authorized users see sensitive data"
+      ],
+      "features": ["Credal Search", "Access Controls", "Citation Engine"],
+      "sources": ["https://docs.credal.ai/compliance-search", "https://docs.credal.ai/access-controls"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 3,
+      "title": "Automated Report Generation",
+      "talking_points": [
+        "Generate compliance reports directly from indexed knowledge base",
+        "Templates ensure consistent formatting across regulatory submissions"
+      ],
+      "features": ["Report Builder", "Template Engine"],
+      "sources": ["https://docs.credal.ai/report-builder"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 4,
+      "title": "Enterprise Security & Data Governance",
+      "talking_points": [
+        "SOC 2 Type II certified with end-to-end encryption",
+        "Data never leaves your VPC with on-premise deployment option",
+        "Full audit logging for regulatory compliance"
+      ],
+      "features": ["SOC 2 Compliance", "VPC Deployment", "Audit Logging"],
+      "sources": ["https://docs.credal.ai/security", "https://docs.credal.ai/audit-logging"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 5,
+      "title": "Salesforce & Confluence Integration",
+      "talking_points": [
+        "Native Salesforce connector syncs account data bidirectionally",
+        "Confluence spaces are automatically indexed and kept up to date"
+      ],
+      "features": ["Salesforce Connector", "Confluence Connector"],
+      "sources": ["https://docs.credal.ai/integrations/salesforce", "https://docs.credal.ai/integrations/confluence"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 6,
+      "title": "Addressing Data Security Concerns",
+      "talking_points": [
+        "All data encrypted at rest and in transit with customer-managed keys",
+        "No model training on customer data — strict data isolation guarantees"
+      ],
+      "features": ["Customer-Managed Keys", "Data Isolation"],
+      "sources": ["https://docs.credal.ai/security"],
+      "grounding_status": "grounded"
+    },
+    {
+      "slide_number": 7,
+      "title": "Implementation Timeline & Next Steps",
+      "talking_points": [
+        "Typical deployment completed in 2-4 weeks with dedicated solutions engineer",
+        "Pilot program available with limited scope to prove ROI before full rollout"
+      ],
+      "features": ["Professional Services", "Pilot Program"],
+      "sources": ["https://docs.credal.ai/implementation"],
+      "grounding_status": "needs_review"
+    }
+  ]
+}
