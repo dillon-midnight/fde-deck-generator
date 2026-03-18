@@ -4,6 +4,11 @@ import { chunkDocument } from "@/lib/chunker";
 import { embedBatch } from "@/lib/embeddings";
 
 const SEED_ORIGIN = "https://docs.credal.ai";
+// Hard cap on pages crawled per cron run. Keeps execution time predictable
+// and within Vercel's cron function duration limit (5 minutes on Pro).
+// Tune this based on the size of the target documentation site. If the docs
+// grow past this ceiling, the right fix is pagination across multiple cron
+// runs, not raising this number.
 const MAX_PAGES = 200;
 const EMBED_BATCH_SIZE = 100;
 
@@ -28,6 +33,10 @@ export async function GET(req: NextRequest) {
       try {
         const response = await fetch(normalized, {
           headers: { "User-Agent": "CredalDeckGenBot/1.0" },
+          // Per-request 10s timeout independent of Vercel's function-level timeout.
+          // A single slow or hanging page should not block the entire crawl. Without
+          // this, one unresponsive URL would stall the queue until the function times
+          // out and the entire crawl run is lost with no chunks inserted.
           signal: AbortSignal.timeout(10000),
         });
 
@@ -75,7 +84,12 @@ export async function GET(req: NextRequest) {
           const embedding = embeddings[j];
           const embeddingStr = `[${embedding.join(",")}]`;
 
-          // Upsert: skip if exact content already exists for this URL
+          // WHERE NOT EXISTS instead of ON CONFLICT because doc_chunks has no unique
+          // constraint on (source_url, content) — adding one would require a hash
+          // index on a TEXT column, which is expensive to maintain on a large table.
+          // This pattern achieves idempotent upsert behavior without the schema cost:
+          // re-crawling the same page on a weekly cron run skips chunks that already
+          // exist rather than duplicating them or failing with a constraint violation.
           await sql`
             INSERT INTO doc_chunks (content, embedding, source_url, page_title)
             SELECT ${chunk.content}, ${embeddingStr}::vector, ${chunk.source_url}, ${chunk.page_title}

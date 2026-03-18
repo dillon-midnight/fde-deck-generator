@@ -6,6 +6,17 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // prompt: "consent" forces Google to show the OAuth consent screen on every
+      // login and guarantees a refresh token is issued each time. Without this,
+      // Google only issues a refresh token on the *first* consent — subsequent
+      // logins return only an access token. If the refresh token is lost (user
+      // clears cookies, token revoked, server restarts) silent re-auth fails and
+      // the user gets a RefreshAccessTokenError with no recovery path. The UX
+      // cost (an extra click) is worth the reliability guarantee.
+      //
+      // access_type: "offline" is required for the refresh token to be issued at
+      // all. Together these two params are the pattern for durable Google OAuth
+      // sessions in server-side Next.js apps.
       authorization: {
         params: {
           scope: "openid email profile https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive.file",
@@ -28,7 +39,11 @@ export const authOptions: NextAuthOptions = {
         };
       }
 
-      // Return token if not expired
+      // Short-circuit: return the cached token if it hasn't expired yet.
+      // Without this check every API route would trigger a Google token refresh
+      // request on every call, adding ~200ms of latency and burning refresh token
+      // quota. Access tokens are valid for 1 hour; this check avoids unnecessary
+      // round-trips during that window.
       if (Date.now() < (token.accessTokenExpires as number)) {
         return token;
       }

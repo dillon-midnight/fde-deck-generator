@@ -1,6 +1,14 @@
 import type { Signals, Deck } from "./schemas";
 
 export function buildSystemPrompt(): string {
+  // The system prompt uses XML tag namespacing as a prompt injection mitigation.
+  // User-supplied signals and retrieved chunk content are wrapped in <signals>
+  // and <product_knowledge> tags, and the model is explicitly instructed not to
+  // treat content inside those tags as instructions. This creates a structural
+  // separation between trusted instructions (system prompt) and untrusted data
+  // (user input + retrieved content). It does not make injection impossible but
+  // it meaningfully raises the bar compared to inline string interpolation with
+  // no structural boundary.
   return `You are a technical solutions architect at Credal.ai. You generate grounded technical solution decks for enterprise prospects.
 
 CRITICAL RULES:
@@ -17,6 +25,12 @@ export function buildUserPrompt(
 ): string {
   let prompt = "";
 
+  // Few-shot examples are injected before the signals and product knowledge,
+  // not after. In a long context window, models weight earlier content more
+  // heavily when establishing output format and tone. Placing examples first
+  // means the model internalizes the pattern (structure, citation style, slide
+  // length) before it encounters the specific inputs for this run. Reversing
+  // this order produces more format drift in practice.
   if (fewShotExamples && fewShotExamples.length > 0) {
     prompt += "<few_shot_examples>\n";
     for (const ex of fewShotExamples) {

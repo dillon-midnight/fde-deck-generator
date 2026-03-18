@@ -27,6 +27,14 @@ interface GroundingResult {
   slidesFailedGrounding: number;
 }
 
+// URL pre-filter: check whether a slide's sources contain at least one URL
+// that came from the retrieved chunks before spending a Gemini token on it.
+//
+// If the model hallucinated a source URL that doesn't exist in our chunk set,
+// we know the slide is ungrounded without an LLM call. On a 10-slide deck this
+// can eliminate 2-3 grounding calls per run. At scale this is meaningful cost
+// reduction. The LLM faithfulness check runs only on slides that pass this
+// cheaper structural gate.
 function hasMatchingUrl(slide: Slide, chunkUrls: Set<string>): boolean {
   return slide.sources.length > 0 && slide.sources.some((s) => chunkUrls.has(s));
 }
@@ -36,6 +44,12 @@ export async function checkAndRegenerate(
   chunks: GroundingChunk[],
   options: GroundingOptions
 ): Promise<GroundingResult> {
+  // maxAttempts = 2 is a deliberate cost ceiling. Regenerating indefinitely
+  // until grounded would guarantee faithfulness but create unbounded LLM spend
+  // on pathological cases where the retrieval chunks don't support the prospect's
+  // use case. Two attempts catches the common failure (bad source URL on first
+  // generation) without letting a single slide consume the budget of the whole
+  // deck.
   const { generateSlide, evaluateSlides, maxAttempts = 2 } = options;
   const chunkUrls = new Set(chunks.map((c) => c.source_url));
 
@@ -139,6 +153,15 @@ export async function checkAndRegenerate(
   };
 }
 
+// groundSlide is the per-slide grounding function used by the streaming
+// pipeline. It operates on one slide at a time so results can be emitted
+// to the client as they complete, enabling the progressive rendering UX.
+//
+// checkAndRegenerate (above) is a batch alternative designed for a future
+// non-streaming path where all slides are generated first and grounded in
+// a single pass. It is not wired into the current pipeline but is kept and
+// tested because the batch approach has better parallelism potential and
+// will be the right choice if we add a background re-grounding job.
 export async function groundSlide(
   slide: Slide,
   chunks: GroundingChunk[],

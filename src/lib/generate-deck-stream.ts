@@ -56,6 +56,11 @@ export async function generateDeckStream(
     emit({ type: "stage", stage: "retrieval", message: "Retrieving product knowledge..." });
 
     // Embed & retrieve
+    // Combine the highest-signal fields into a single embedding query.
+    // Objections and tools are deliberately excluded — they describe the prospect's
+    // constraints, not the product knowledge we want to retrieve. Including them
+    // would shift the embedding toward problem-space vectors and away from
+    // solution-space chunks that actually belong in the deck.
     const queryText = `${signals.company} ${signals.industry} ${signals.pain_points.join(" ")} ${signals.use_cases.join(" ")}`;
     const queryEmbedding = await embedText(queryText);
     const chunks = await vectorSearch(queryEmbedding, "doc_chunks", 10);
@@ -65,6 +70,11 @@ export async function generateDeckStream(
     }
 
     // Few-shot examples (best effort)
+    // Few-shot examples are best-effort: a cold-start system with no eval history
+    // should still generate a deck. Wrapping in try/catch means a missing table,
+    // empty result, or malformed row degrades gracefully to zero-shot generation
+    // rather than blocking the entire pipeline. The quality improvement from
+    // examples is additive, not load-bearing.
     let fewShotExamples: { signals: Signals; deck: Deck; diff?: unknown }[] = [];
     try {
       const evalRows = await sql`
@@ -89,7 +99,17 @@ export async function generateDeckStream(
 
     emit({ type: "stage", stage: "generation", message: "Generating slides..." });
 
-    // Slide queue for producer/consumer
+    // Producer/consumer pattern: generation (Claude Sonnet) and grounding
+    // (Gemini Flash Lite) run concurrently rather than sequentially.
+    //
+    // Without this pattern the flow would be: generate ALL slides → ground ALL
+    // slides → emit. The SA would see a spinner for 30-60 seconds then all slides
+    // at once. With the queue, grounding starts on slide 1 while the model is
+    // still generating slide 2. Slides appear in the editor as they complete,
+    // which matches how a human SA would present — progressively, not all at once.
+    //
+    // The resolveWait/notify mechanism is a lightweight manual promise that unblocks
+    // the consumer each time the producer pushes a slide. This avoids polling.
     const slideQueue: Slide[] = [];
     let producerDone = false;
     let resolveWait: (() => void) | null = null;
@@ -169,13 +189,22 @@ export async function generateDeckStream(
             }),
             system: systemPrompt,
             prompt: userPrompt,
+            // 4096 tokens supports 8-10 slides with full talking points and sources.
+            // Setting an explicit ceiling prevents runaway generation costs if the model
+            // decides to be unusually verbose. The grounding calls use 512/1024 — enough
+            // for a JSON eval result or a single regenerated slide, no more.
             maxOutputTokens: 4096,
           });
 
           let emittedCount = 0;
           for await (const partial of result.partialOutputStream) {
             if (!partial?.slides) continue;
-            // Slides at index 0..length-2 are complete (model moved past them)
+            // A partial stream yields slides as the model writes them. The last slide in
+            // any partial emission is still being written — its fields may be truncated.
+            // Only slides at indices 0..length-2 are structurally complete (the model
+            // has moved on to the next slide, implying the previous one is closed).
+            // Processing the in-progress tail slide risks emitting malformed JSON to the
+            // grounding consumer.
             const completeCount = Math.max(0, partial.slides.length - 1);
             for (let i = emittedCount; i < completeCount; i++) {
               const s = partial.slides[i];
