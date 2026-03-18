@@ -3,7 +3,7 @@ import { trace, SpanStatusCode } from "@opentelemetry/api";
 
 const tracer = trace.getTracer("fde-deck-generator");
 
-interface GroundingChunk {
+export interface GroundingChunk {
   id: number;
   content: string;
   source_url: string;
@@ -137,4 +137,35 @@ export async function checkAndRegenerate(
     iterations,
     slidesFailedGrounding,
   };
+}
+
+export async function groundSlide(
+  slide: Slide,
+  chunks: GroundingChunk[],
+  options: {
+    evaluateSlide: (slide: Slide, chunks: GroundingChunk[]) => Promise<SlideEvaluation>;
+    regenerateSlide: (slide: Slide, chunks: GroundingChunk[]) => Promise<Slide>;
+    maxAttempts?: number;
+  }
+): Promise<Slide & { grounding_status: "grounded" | "needs_review" }> {
+  const { evaluateSlide, regenerateSlide, maxAttempts = 2 } = options;
+  const chunkUrls = new Set(chunks.map((c) => c.source_url));
+
+  let current = slide;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (!hasMatchingUrl(current, chunkUrls)) {
+      current = await regenerateSlide(current, chunks);
+      continue;
+    }
+
+    const evaluation = await evaluateSlide(current, chunks);
+    if (evaluation.grounded) {
+      return { ...current, grounding_status: "grounded" };
+    }
+
+    current = await regenerateSlide(current, chunks);
+  }
+
+  return { ...current, grounding_status: "needs_review" };
 }

@@ -33,3 +33,9 @@ export type Deck = z.infer<typeof DeckSchema>;
 export const EvalRequestSchema = z.object({
   edited_deck: DeckSchema,
 });
+
+export type StreamEvent =
+  | { type: "stage"; stage: string; message: string }
+  | { type: "slide"; slide: Slide }
+  | { type: "error"; message: string }
+  | { type: "complete"; deal_id: string; faithfulness_rate: number };
