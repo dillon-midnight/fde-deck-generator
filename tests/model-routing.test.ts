@@ -119,7 +119,7 @@ describe("model routing", () => {
     expect(generateTextCalls.some((c) => c.model === "google/gemini-2.0-flash-lite")).toBe(true);
   });
 
-  it("passes grounding provider options with ZDR to generateText", async () => {
+  it("passes grounding provider options without ZDR to generateText", async () => {
     const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
     await generateDeckStream(validSignals, "user-1", () => {});
 
@@ -128,20 +128,29 @@ describe("model routing", () => {
     for (const call of groundingCalls) {
       expect(call.providerOptions).toEqual({
         gateway: {
-          zeroDataRetention: true,
           models: ["anthropic/claude-haiku-4-5"],
         },
       });
     }
   });
 
-  it("all AI calls have zeroDataRetention enabled", async () => {
+  it("generation calls have zeroDataRetention enabled", async () => {
     const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
     await generateDeckStream(validSignals, "user-1", () => {});
 
-    for (const call of [...streamTextCalls, ...generateTextCalls]) {
+    for (const call of streamTextCalls) {
       const opts = call.providerOptions as { gateway?: { zeroDataRetention?: boolean } };
       expect(opts?.gateway?.zeroDataRetention).toBe(true);
+    }
+  });
+
+  it("grounding calls do not have zeroDataRetention", async () => {
+    const { generateDeckStream } = await import("../src/lib/generate-deck-stream");
+    await generateDeckStream(validSignals, "user-1", () => {});
+
+    for (const call of generateTextCalls) {
+      const opts = call.providerOptions as { gateway?: { zeroDataRetention?: boolean } };
+      expect(opts?.gateway?.zeroDataRetention).toBeUndefined();
     }
   });
 
