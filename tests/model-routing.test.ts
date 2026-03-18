@@ -129,7 +129,7 @@ describe("model routing", () => {
       expect(call.providerOptions).toEqual({
         gateway: {
           zeroDataRetention: true,
-          models: ["anthropic/claude-haiku-4-5", "groq/llama-3.3-70b-versatile"],
+          models: ["anthropic/claude-haiku-4-5"],
         },
       });
     }

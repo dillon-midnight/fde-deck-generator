@@ -33,6 +33,6 @@ export const GROUNDING_MODEL = "google/gemini-2.0-flash-lite";
 export const GROUNDING_PROVIDER_OPTIONS = {
   gateway: {
     zeroDataRetention: true,
-    models: ["anthropic/claude-haiku-4-5", "groq/llama-3.3-70b-versatile"],
+    models: ["anthropic/claude-haiku-4-5"],
   },
 };
