@@ -9,6 +9,12 @@ import {
   type Deck,
   type StreamEvent,
 } from "./schemas";
+import {
+  GENERATION_MODEL,
+  GENERATION_FALLBACKS,
+  GROUNDING_MODEL,
+  GROUNDING_FALLBACKS,
+} from "./models";
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
 import { vectorSearch } from "./rag";
@@ -110,7 +116,8 @@ export async function generateDeckStream(
     function makeEvaluateSlide(evalChunks: GroundingChunk[]) {
       return async (slide: Slide, _chunks: GroundingChunk[]) => {
         const { output } = await generateText({
-          model: gateway("google/gemini-2.0-flash-lite"),
+          model: gateway(GROUNDING_MODEL),
+          providerOptions: GROUNDING_FALLBACKS,
           output: Output.object({
             schema: z.object({
               slide_number: z.number(),
@@ -130,7 +137,8 @@ export async function generateDeckStream(
     function makeRegenerateSlide(regenChunks: GroundingChunk[]) {
       return async (slide: Slide, _chunks: GroundingChunk[]) => {
         const { output } = await generateText({
-          model: gateway("google/gemini-2.0-flash-lite"),
+          model: gateway(GROUNDING_MODEL),
+          providerOptions: GROUNDING_FALLBACKS,
           output: Output.object({ schema: SlideSchema }),
           system: systemPrompt,
           prompt: `Regenerate this slide to be grounded in the product knowledge. The sources MUST reference URLs from the provided chunks.\n\nSlide to fix:\n${JSON.stringify(slide)}\n\nAvailable chunks:\n${regenChunks.map((c) => `[source:${c.source_url}]\n${c.content}`).join("\n\n")}\n\nReturn a single JSON slide object.`,
@@ -149,12 +157,13 @@ export async function generateDeckStream(
       (async () => {
         const generateSpan = tracer.startSpan("llm-generate-deck-stream");
         generateSpan.setAttributes({
-          "llm.model": "anthropic/claude-sonnet-4-6",
+          "llm.model": GENERATION_MODEL,
           "deck.company": signals.company,
         });
         try {
           const result = streamText({
-            model: gateway("anthropic/claude-sonnet-4-6"),
+            model: gateway(GENERATION_MODEL),
+            providerOptions: GENERATION_FALLBACKS,
             output: Output.object({
               schema: z.object({ slides: z.array(SlideSchema) }),
             }),
