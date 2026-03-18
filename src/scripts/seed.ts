@@ -13,6 +13,20 @@ if (!DATABASE_URL) {
 
 const sql = neon(DATABASE_URL);
 
+// Credal.ai is the seed source for this take-home assessment for three reasons:
+// 1. The founder is a known contact, so the product architecture and use cases
+//    are well understood — this reduces the risk of seeding irrelevant or
+//    misleading documentation into the RAG index.
+// 2. Credal's product (enterprise AI access control and search) maps naturally
+//    onto the SA deck generator use case: the prospect personas, pain points,
+//    and features described in its docs produce coherent, realistic output slides.
+// 3. docs.credal.ai is a mid-sized, well-structured documentation site (~100-150
+//    pages) that fits comfortably within the MAX_PAGES crawl budget and produces
+//    a good-quality embedding index without requiring manual curation.
+//
+// In production this would be replaced with the customer's own documentation
+// site, internal knowledge base, or product docs — the crawler, chunker,
+// embedder, and RAG retrieval pipeline are fully generic.
 const SEED_ORIGIN = "https://docs.credal.ai";
 const MAX_PAGES = 200;
 const EMBED_BATCH_SIZE = 100;

@@ -9,7 +9,16 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: blob:",
+      // connect-src is restricted to 'self' and slides.googleapis.com only.
+      // The Google Slides export calls the Slides API directly from the browser
+      // using the user's OAuth token — this is the only external API the client
+      // legitimately needs to reach. Allowing '*' would permit data exfiltration
+      // via XSS-injected fetch calls to attacker-controlled endpoints.
       "connect-src 'self' https://slides.googleapis.com",
+      // Disallow framing entirely. The app handles OAuth tokens and deal data —
+      // clickjacking via an invisible iframe overlay is a meaningful attack vector.
+      // 'none' is stricter than 'self' and appropriate for an app with no
+      // legitimate embedding use case.
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

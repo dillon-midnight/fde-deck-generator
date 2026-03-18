@@ -4,6 +4,13 @@ import { generateDeckStream } from "@/lib/generate-deck-stream";
 import type { StreamEvent } from "@/lib/schemas";
 
 export async function POST(req: NextRequest) {
+  // Auth must be verified before the ReadableStream is constructed.
+  // Once a streaming response has started, you cannot change the HTTP status
+  // code — headers are already flushed. Checking auth inside the stream
+  // start() callback would mean an unauthorized request gets a 200 with an
+  // error event in the stream body, which clients cannot reliably distinguish
+  // from a mid-stream failure. Fail fast with a proper 401 before any bytes
+  // are sent.
   let session;
   try {
     session = await requireAuth();
@@ -21,6 +28,12 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // emit is defined in the outer scope of start() so it remains accessible
+      // in the catch block. If generateDeckStream throws after the stream has
+      // already started, we need to send an error event to the client rather than
+      // silently closing the connection. The client-side EventSource reader
+      // distinguishes error events from connection drops and shows the user a
+      // recoverable error message instead of an infinite spinner.
       function emit(event: StreamEvent) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       }

@@ -11,6 +11,13 @@ const INJECTION_PATTERNS = [
   /new\s+instructions\s*:/i,
 ];
 
+// Normalize leet-speak substitutions before pattern matching.
+// A naive regex on raw input would miss "1gn0re pr3v10us 1nstruct10ns".
+// Attackers who know you use regex will probe with character substitutions.
+// Normalizing to plain ASCII first collapses the evasion surface before
+// the patterns run. This is not comprehensive — a determined attacker with
+// enough creativity will find gaps — but it raises the cost of evasion
+// significantly for the most common substitution patterns.
 function normalize(text: string): string {
   return text
     .toLowerCase()
@@ -33,6 +40,11 @@ export function injectionDetected(signals: Record<string, unknown>): boolean {
   for (const value of Object.values(signals)) {
     if (typeof value === "string") {
       if (scanText(value)) return true;
+      // Scan array fields (pain_points, use_cases, objections, tools) individually.
+    // An attacker who knows the schema is validated as an object would embed
+    // injection in an array item expecting only top-level fields to be scanned.
+    // Every string reachable from the signals object is a potential injection
+    // vector and must be checked.
     } else if (Array.isArray(value)) {
       for (const item of value) {
         if (typeof item === "string" && scanText(item)) return true;
