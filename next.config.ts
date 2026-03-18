@@ -9,7 +9,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
       "img-src 'self' data: blob:",
-      "connect-src 'self'",
+      "connect-src 'self' https://slides.googleapis.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
