@@ -16,7 +16,7 @@ describe("SignalsSchema", () => {
   });
 
   it("rejects missing required fields", () => {
-    const { company, ...rest } = validSignals;
+    const { company: _company, ...rest } = validSignals;
     expect(() => SignalsSchema.parse(rest)).toThrow();
   });
 

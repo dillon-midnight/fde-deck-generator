@@ -15,11 +15,11 @@ export async function GET(
       WHERE deal_id = ${deal_id} AND user_id = ${session.user.id}
     `;
 
-    if (!runs || (runs as any[]).length === 0) {
+    if (!runs || runs.length === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const run = (runs as any[])[0];
+    const run = runs[0];
 
     // Check for eval
     const evals = await sql`
@@ -31,10 +31,10 @@ export async function GET(
     return NextResponse.json({
       deck: run.generated_deck,
       pipelineRun: run,
-      eval: (evals as any[]).length > 0 ? (evals as any[])[0] : null,
+      eval: evals.length > 0 ? evals[0] : null,
     });
-  } catch (err: any) {
-    if (err.message === "Unauthorized") {
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

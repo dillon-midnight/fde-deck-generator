@@ -3,7 +3,7 @@ import { checkAndRegenerate } from "@/lib/grounding";
 import type { Deck, Slide } from "@/lib/schemas";
 
 // Helper to make a slide
-function makeSlide(num: number, sources: string[], grounded = true): Slide {
+function makeSlide(num: number, sources: string[]): Slide {
   return {
     slide_number: num,
     title: `Slide ${num}`,
@@ -94,7 +94,7 @@ describe("checkAndRegenerate", () => {
         makeSlide(2, ["https://docs.credal.ai/sso"]), // good URL — passes
       ],
     };
-    const result = await checkAndRegenerate(deck, chunks, { generateSlide, evaluateSlides });
+    await checkAndRegenerate(deck, chunks, { generateSlide, evaluateSlides });
     // Slide 1 failed URL pre-filter, so generateSlide was called for it
     expect(generateSlide).toHaveBeenCalledTimes(1);
     expect(generateSlide.mock.calls[0][0].slide_number).toBe(1);
@@ -134,15 +134,13 @@ describe("checkAndRegenerate", () => {
         makeSlide(2, ["https://docs.credal.ai/sso"]),
       ],
     };
-    const result = await checkAndRegenerate(deck, chunks, { generateSlide, evaluateSlides, maxAttempts: 2 });
+    await checkAndRegenerate(deck, chunks, { generateSlide, evaluateSlides, maxAttempts: 2 });
     // 2 failing slides × 2 attempts = 4 max calls
     expect(generateSlide).toHaveBeenCalledTimes(4);
   });
 
   it("stops regenerating a slide once it passes", async () => {
-    let regenCount = 0;
-    const generateSlide = vi.fn().mockImplementation(async (slide: Slide) => {
-      regenCount++;
+    const generateSlide = vi.fn().mockImplementation(async () => {
       return makeSlide(1, ["https://docs.credal.ai/audit"]);
     });
     // First eval: fail. Second eval (after regen): pass.

@@ -39,7 +39,7 @@ export async function checkAndRegenerate(
   const { generateSlide, evaluateSlides, maxAttempts = 2 } = options;
   const chunkUrls = new Set(chunks.map((c) => c.source_url));
 
-  let currentSlides = [...deck.slides];
+  const currentSlides = [...deck.slides];
   let iterations = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

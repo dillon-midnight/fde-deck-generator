@@ -16,11 +16,12 @@ export function ExportButton({ deck }: ExportButtonProps) {
   const [error, setError] = useState<string | null>(null);
 
   async function handleExport() {
-    if ((session as any)?.error === "RefreshAccessTokenError") {
+    const s = session as Record<string, unknown> | null;
+    if (s?.error === "RefreshAccessTokenError") {
       setError("Session expired. Please sign in again.");
       return;
     }
-    const accessToken = (session as any)?.accessToken;
+    const accessToken = s?.accessToken as string | undefined;
     if (!accessToken) {
       setError("No Google access token. Please sign in again.");
       return;
@@ -32,8 +33,8 @@ export function ExportButton({ deck }: ExportButtonProps) {
     try {
       const presentationUrl = await exportToGoogleSlides(deck, accessToken);
       setUrl(presentationUrl);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setExporting(false);
     }

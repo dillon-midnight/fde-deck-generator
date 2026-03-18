@@ -1,4 +1,4 @@
-import type { Deck, Slide } from "./schemas";
+import type { Deck } from "./schemas";
 
 interface SlideRequest {
   createSlide: {

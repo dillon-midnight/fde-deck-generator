@@ -19,11 +19,11 @@ export async function POST(
       WHERE deal_id = ${deal_id} AND user_id = ${session.user.id}
     `;
 
-    if (!runs || (runs as any[]).length === 0) {
+    if (!runs || runs.length === 0) {
       return NextResponse.json({ error: "Deal not found" }, { status: 400 });
     }
 
-    const run = (runs as any[])[0];
+    const run = runs[0];
 
     const body = await req.json();
     const { edited_deck } = EvalRequestSchema.parse(body);
@@ -37,11 +37,11 @@ export async function POST(
     `;
 
     return NextResponse.json({ diff }, { status: 200 });
-  } catch (err: any) {
-    if (err.message === "Unauthorized") {
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     console.error("Eval error:", err);
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 400 });
   }
 }

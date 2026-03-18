@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import type { Deck, Slide } from "@/lib/schemas";
 import { SlideCard } from "./slide-card";
 import { ExportButton } from "./export-button";
@@ -11,7 +11,6 @@ interface DeckEditorProps {
 }
 
 export function DeckEditor({ initialDeck, existingEval }: DeckEditorProps) {
-  const originalDeck = useRef(initialDeck);
   const [editedDeck, setEditedDeck] = useState<Deck>(
     existingEval?.edited_deck || initialDeck
   );
@@ -47,8 +46,8 @@ export function DeckEditor({ initialDeck, existingEval }: DeckEditorProps) {
       }
 
       setSaved(true);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setSaving(false);
     }
