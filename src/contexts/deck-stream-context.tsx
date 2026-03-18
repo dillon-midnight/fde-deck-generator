@@ -1,10 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
 import type { Slide, StreamEvent } from "@/lib/schemas";
 
 interface DeckStreamState {
   slides: Slide[];
+  company: string | null;
   stage: string | null;
   stageMessage: string | null;
   error: string | null;
@@ -12,16 +21,25 @@ interface DeckStreamState {
   result: { deal_id: string; faithfulness_rate: number } | null;
 }
 
-export function useDeckStream() {
-  const [state, setState] = useState<DeckStreamState>({
-    slides: [],
-    stage: null,
-    stageMessage: null,
-    error: null,
-    isStreaming: false,
-    result: null,
-  });
+interface DeckStreamContextValue extends DeckStreamState {
+  startStream: (signals: Record<string, unknown>) => void;
+  clearStream: () => void;
+}
 
+const initialState: DeckStreamState = {
+  slides: [],
+  company: null,
+  stage: null,
+  stageMessage: null,
+  error: null,
+  isStreaming: false,
+  result: null,
+};
+
+const DeckStreamContext = createContext<DeckStreamContextValue | null>(null);
+
+export function DeckStreamProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<DeckStreamState>(initialState);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -31,19 +49,16 @@ export function useDeckStream() {
   }, []);
 
   const startStream = useCallback((signals: Record<string, unknown>) => {
-    // Abort any in-flight stream
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Reset state
+    const company = typeof signals.company === "string" ? signals.company : null;
+
     setState({
-      slides: [],
-      stage: null,
-      stageMessage: null,
-      error: null,
+      ...initialState,
+      company,
       isStreaming: true,
-      result: null,
     });
 
     (async () => {
@@ -56,7 +71,9 @@ export function useDeckStream() {
         });
 
         if (!res.ok) {
-          const data = await res.json().catch(() => ({ error: "Request failed" }));
+          const data = await res
+            .json()
+            .catch(() => ({ error: "Request failed" }));
           setState((s) => ({
             ...s,
             error: data.error || `HTTP ${res.status}`,
@@ -75,7 +92,7 @@ export function useDeckStream() {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n\n");
-          buffer = lines.pop()!; // Keep incomplete chunk
+          buffer = lines.pop()!;
 
           for (const line of lines) {
             const trimmed = line.trim();
@@ -123,7 +140,6 @@ export function useDeckStream() {
           }
         }
 
-        // Stream ended without complete event
         setState((s) => (s.isStreaming ? { ...s, isStreaming: false } : s));
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -136,5 +152,24 @@ export function useDeckStream() {
     })();
   }, []);
 
-  return { ...state, startStream };
+  const clearStream = useCallback(() => {
+    abortRef.current?.abort();
+    setState(initialState);
+  }, []);
+
+  return (
+    <DeckStreamContext.Provider value={{ ...state, startStream, clearStream }}>
+      {children}
+    </DeckStreamContext.Provider>
+  );
+}
+
+export function useDeckStreamContext() {
+  const ctx = useContext(DeckStreamContext);
+  if (!ctx) {
+    throw new Error(
+      "useDeckStreamContext must be used within a DeckStreamProvider"
+    );
+  }
+  return ctx;
 }

@@ -7,9 +7,10 @@ import type { Deck } from "@/lib/schemas";
 
 interface ExportButtonProps {
   deck: Deck;
+  disabled?: boolean;
 }
 
-export function ExportButton({ deck }: ExportButtonProps) {
+export function ExportButton({ deck, disabled }: ExportButtonProps) {
   const { data: session } = useSession();
   const [exporting, setExporting] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function ExportButton({ deck }: ExportButtonProps) {
     <div className="flex items-center gap-3">
       <button
         onClick={handleExport}
-        disabled={exporting}
+        disabled={exporting || disabled}
         className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer"
       >
         {exporting ? "Exporting..." : "Export to Google Slides"}
