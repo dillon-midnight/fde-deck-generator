@@ -23,7 +23,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg p-8 max-w-sm w-full text-center space-y-6">
-        <h1 className="text-2xl font-bold">FDE Deck Generator</h1>
+        <h1 className="text-2xl font-bold">SA Deck Generator</h1>
         <p className="text-foreground/60 text-sm">
           Generate grounded technical solution decks from discovery signals.
         </p>

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FDE Deck Generator",
+  title: "SA Deck Generator",
   description: "Generate grounded technical solution decks from discovery signals",
 };
 
