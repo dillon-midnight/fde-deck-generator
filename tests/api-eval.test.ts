@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { computeDiff } from "@/lib/diff";
 import type { Deck } from "@/lib/schemas";
 
-function makeDeck(slides: any[]): Deck {
+function makeDeck(slides: Deck["slides"]): Deck {
   return { deal_id: "deal-1", company: "Acme", slides };
 }
 

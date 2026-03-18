@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import { computeDiff } from "@/lib/diff";
 import type { Deck } from "@/lib/schemas";
 
-function makeDeck(slides: any[]): Deck {
+function makeDeck(slides: Deck["slides"]): Deck {
   return { deal_id: "deal-1", company: "Acme", slides };
 }
 
-function makeSlide(num: number, overrides: Record<string, any> = {}) {
+function makeSlide(num: number, overrides: Record<string, unknown> = {}) {
   return {
     slide_number: num,
     title: `Slide ${num}`,

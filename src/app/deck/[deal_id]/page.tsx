@@ -14,7 +14,7 @@ export default function DeckPage() {
   const dealId = params.deal_id as string;
 
   const [deck, setDeck] = useState<Deck | null>(null);
-  const [evalData, setEvalData] = useState<any>(null);
+  const [evalData, setEvalData] = useState<{ ae_diff: unknown; edited_deck: Deck } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

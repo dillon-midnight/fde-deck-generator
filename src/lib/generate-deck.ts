@@ -5,7 +5,7 @@ import { SignalsSchema, SlideSchema, type Signals, type Deck, type Slide } from 
 import { injectionDetected } from "./injection";
 import { embedText } from "./embeddings";
 import { vectorSearch } from "./rag";
-import { checkAndRegenerate, type SlideEvaluation } from "./grounding";
+import { checkAndRegenerate } from "./grounding";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { sql } from "./db";
 import { trace, SpanStatusCode } from "@opentelemetry/api";
@@ -46,7 +46,7 @@ export async function generateDeck(
       ORDER BY timestamp DESC
       LIMIT 3
     `;
-    fewShotExamples = (evalRows as any[]).map((row) => ({
+    fewShotExamples = evalRows.map((row) => ({
       signals: row.transcript_signals,
       deck: row.generated_deck,
       diff: row.ae_diff,

@@ -72,8 +72,8 @@ export function SignalForm() {
 
       const data = await res.json();
       router.push(`/deck/${data.deck.deal_id}`);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }

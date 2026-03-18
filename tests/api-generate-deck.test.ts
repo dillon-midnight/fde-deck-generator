@@ -15,38 +15,56 @@ vi.mock("@/lib/rag", () => ({
 
 vi.mock("@/lib/db", () => ({
   sql: Object.assign(
-    (strings: TemplateStringsArray, ...values: any[]) => Promise.resolve([]),
+    () => Promise.resolve([]),
     { query: vi.fn().mockResolvedValue([]) }
   ),
 }));
 
+const mockSlides = [
+  {
+    slide_number: 1,
+    title: "Credal for Acme Corp",
+    talking_points: ["Credal provides audit trails for all AI interactions"],
+    features: ["Audit Trail"],
+    sources: ["https://docs.credal.ai/audit"],
+  },
+  {
+    slide_number: 2,
+    title: "Enterprise Integrations",
+    talking_points: ["Credal integrates with major enterprise tools"],
+    features: ["Integrations"],
+    sources: ["https://docs.credal.ai/integrations"],
+  },
+];
+
+let generateTextCallCount = 0;
 vi.mock("ai", () => ({
-  generateText: vi.fn().mockResolvedValue({
-    text: JSON.stringify({
-      slides: [
-        {
-          slide_number: 1,
-          title: "Credal for Acme Corp",
-          talking_points: ["Credal provides audit trails for all AI interactions"],
-          features: ["Audit Trail"],
-          sources: ["https://docs.credal.ai/audit"],
-        },
-        {
-          slide_number: 2,
-          title: "Enterprise Integrations",
-          talking_points: ["Credal integrates with major enterprise tools"],
-          features: ["Integrations"],
-          sources: ["https://docs.credal.ai/integrations"],
-        },
-      ],
-    }),
+  generateText: vi.fn().mockImplementation(() => {
+    generateTextCallCount++;
+    // First call: deck generation. Second+: grounding evaluation.
+    if (generateTextCallCount === 1) {
+      return Promise.resolve({ output: { slides: mockSlides } });
+    }
+    // Grounding evaluation call
+    return Promise.resolve({
+      output: {
+        evaluations: mockSlides.map((s) => ({
+          slide_number: s.slide_number,
+          grounded: true,
+          reason: "supported",
+        })),
+      },
+    });
   }),
+  Output: {
+    object: vi.fn().mockImplementation(({ schema }) => schema),
+  },
   embed: vi.fn().mockResolvedValue({ embedding: new Array(1536).fill(0) }),
   embedMany: vi.fn().mockResolvedValue({ embeddings: [new Array(1536).fill(0)] }),
 }));
 
-vi.mock("@ai-sdk/anthropic", () => ({
-  anthropic: vi.fn().mockReturnValue({ modelId: "claude-sonnet-4-6" }),
+vi.mock("@ai-sdk/gateway", () => ({
+  gateway: vi.fn().mockReturnValue({ modelId: "anthropic/claude-sonnet-4-6" }),
 }));
 
 import { generateDeck } from "@/lib/generate-deck";
@@ -66,6 +84,7 @@ const validSignals = {
 describe("generateDeck", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    generateTextCallCount = 0;
   });
 
   // Happy path
@@ -105,8 +124,8 @@ describe("generateDeck", () => {
 
   // Validation
   it("throws on missing company", async () => {
-    const { company, ...noCompany } = validSignals;
-    await expect(generateDeck(noCompany as any, "user-1")).rejects.toThrow();
+    const { company: _company, ...noCompany } = validSignals;
+    await expect(generateDeck(noCompany as unknown, "user-1")).rejects.toThrow();
   });
 
   it("throws on empty company", async () => {
@@ -114,7 +133,7 @@ describe("generateDeck", () => {
   });
 
   it("throws on invalid signals shape", async () => {
-    await expect(generateDeck({ company: "X" } as any, "user-1")).rejects.toThrow();
+    await expect(generateDeck({ company: "X" } as unknown, "user-1")).rejects.toThrow();
   });
 
   // Security

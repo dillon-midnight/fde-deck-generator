@@ -93,8 +93,8 @@ export async function GET(req: NextRequest) {
       pages: pages.size,
       chunks: totalChunks,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Cron crawl error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
   }
 }

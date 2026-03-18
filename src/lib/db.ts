@@ -14,9 +14,9 @@ export const sql = new Proxy(
   function () {} as unknown as NeonQueryFunction<false, false>,
   {
   apply(_target, _thisArg, args) {
-    return getSql()(...(args as [TemplateStringsArray, ...any[]]));
+    return getSql()(...(args as [TemplateStringsArray, ...unknown[]]));
   },
   get(_target, prop) {
-    return (getSql() as any)[prop];
+    return (getSql() as unknown as Record<string | symbol, unknown>)[prop];
   },
 });
