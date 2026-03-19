@@ -57,6 +57,17 @@ The app keeps it simple for now and just uses AI Gateway's native model fallback
 
 The app also keeps it simple for now and uses AI Gateway's Zero Data Retention feature, while also implementing basics like prompt injection detection, input validation, auth on every route, and system prompt hardening.
 
+### Frontend Rendering Strategy
+
+Every route in the app is either personalized, auth-gated, or real-time — so static generation is off the table. Instead, each route picks the lightest rendering strategy that still meets its data and interactivity requirements:
+
+- **Edge Middleware (auth check)** — Auth is validated at the edge before the request ever reaches the origin. This prevents unauthenticated page renders entirely, which eliminates the redirect flash (CLS) and wasted server compute that a client-side auth check would cause.
+- **`/` (login)** — A Server Component with a static shell and zero client JS except for the `SignInButton` island. Authenticated users are server-redirected before any HTML is sent, so there's no layout shift from a late client-side redirect.
+- **`/dashboard`** — Dynamic SSR with a Suspense boundary and `loading.tsx` skeleton. The server-side DB query eliminates a client fetch waterfall, and the streamed skeleton gives the browser something to paint immediately, improving LCP on slow connections.
+- **`/generate`** — Server-rendered shell with `SignalForm` as the only Client Component (it needs form state and streaming context). Keeping the shell server-rendered means the page is interactive faster since the client bundle is limited to the form island.
+- **`/deck/[deal_id]` (saved deck)** — Dynamic SSR with a direct DB query in the Server Component. Data is passed as props to the `DeckEditor` Client Component, so the client never fetches — it hydrates with the deck already in hand.
+- **`/deck/[deal_id]` (streaming)** — Client-side rendering via SSE in the `StreamingDeckView` Client Component. SSE requires a persistent browser connection, so server rendering isn't an option here — the client must own the connection lifecycle.
+
 ## Production Considerations
 
 ### Security
