@@ -1,44 +1,32 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+// RENDERING STRATEGY: Dynamic SSR with Streaming (Suspense).
+// The dashboard is a read-only list of links — zero interactivity. Making
+// it a Server Component lets us fetch deals directly from the database
+// on the server, eliminating the client-side waterfall that the previous
+// CSR version had: load JS → hydrate → useEffect fires → fetch /api/deals
+// → API queries DB → setState → re-render. Now it's a single server
+// roundtrip. The sibling loading.tsx creates an automatic Suspense boundary
+// so navigation feels instant — the shell streams first, then the
+// data-dependent content streams in when the DB query resolves.
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
+import { authOptions } from "@/lib/auth";
+import { sql } from "@/lib/db";
 import { Nav } from "@/components/nav";
 
-interface Deal {
-  deal_id: string;
-  signals: { company: string };
-  timestamp: string;
-  total_slides: number;
-  faithfulness_rate: number;
-  eval_status: string;
-}
+export default async function Dashboard() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) redirect("/");
 
-export default function Dashboard() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/");
-  }, [status, router]);
-
-  useEffect(() => {
-    if (!session) return;
-    fetch("/api/deals")
-      .then((r) => r.json())
-      .then((data) => {
-        setDeals(data.deals || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [session]);
-
-  if (status === "loading" || !session) {
-    return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
-  }
+  const deals = await sql`
+    SELECT pr.deal_id, pr.signals, pr.timestamp, pr.total_slides,
+      pr.faithfulness_rate,
+      CASE WHEN et.eval_id IS NOT NULL THEN 'Reviewed' ELSE 'Pending review' END as eval_status
+    FROM pipeline_runs pr
+    LEFT JOIN eval_tuples et ON pr.deal_id = et.deal_id AND et.user_id = ${session.user.id}
+    WHERE pr.user_id = ${session.user.id}
+    ORDER BY pr.timestamp DESC
+  `;
 
   return (
     <div className="min-h-screen">
@@ -54,9 +42,7 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {loading ? (
-          <p className="text-neutral-500">Loading...</p>
-        ) : deals.length === 0 ? (
+        {deals.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-neutral-500 mb-4">No decks generated yet.</p>
             <Link

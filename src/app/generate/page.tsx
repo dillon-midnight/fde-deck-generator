@@ -1,23 +1,13 @@
-"use client";
-
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+// RENDERING STRATEGY: Server Component with Client Component islands.
+// The page shell (nav, heading, layout) is server-rendered with zero JS
+// bundle cost. SignalForm is a Client Component "island" because it manages
+// form state, uses useDeckStreamContext() for streaming, and triggers
+// client-side navigation. This is the Next.js composition model — push
+// "use client" to the leaves, keep the trunk server-rendered.
 import { Nav } from "@/components/nav";
 import { SignalForm } from "@/components/signal-form";
 
 export default function GeneratePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/");
-  }, [status, router]);
-
-  if (status === "loading" || !session) {
-    return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
-  }
-
   return (
     <div className="min-h-screen">
       <Nav />

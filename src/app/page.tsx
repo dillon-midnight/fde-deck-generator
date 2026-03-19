@@ -1,24 +1,18 @@
-"use client";
+// RENDERING STRATEGY: Server Component with server-side redirect.
+// The login page is static markup — heading, description, and a sign-in
+// button. Making it a Server Component means zero JS ships for the shell.
+// The auth check and redirect happen server-side via getServerSession(),
+// so authenticated users never see the login page flash. The only Client
+// Component is SignInButton, because next-auth's signIn() is a
+// browser-side function that opens the OAuth popup.
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
+import { SignInButton } from "@/components/sign-in-button";
 
-import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-
-export default function Home() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (session) router.replace("/dashboard");
-  }, [session, router]);
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-foreground/60">Loading...</p>
-      </div>
-    );
-  }
+export default async function Home() {
+  const session = await getServerSession(authOptions);
+  if (session) redirect("/dashboard");
 
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -27,12 +21,7 @@ export default function Home() {
         <p className="text-foreground/60 text-sm">
           Generate grounded technical solution decks from discovery signals.
         </p>
-        <button
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer"
-        >
-          Sign in with Google
-        </button>
+        <SignInButton />
       </div>
     </div>
   );
