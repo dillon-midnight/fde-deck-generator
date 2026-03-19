@@ -1,8 +1,7 @@
-// Suspense fallback for the deck route. Even though the page is a Client
-// Component, loading.tsx still helps — it streams a skeleton to the browser
-// instantly during navigation instead of showing a blank screen while the
-// client JS bundle downloads and hydrates. This is Suspense working with
-// CSR, not replacing it.
+// Suspense fallback for the deck route. The page is a Server Component that
+// fetches saved decks from the DB — this skeleton streams instantly while that
+// query runs. On the streaming path, it also covers JS download time for the
+// Client Components (DeckEditor / StreamingDeckView) that hydrate below.
 export default function DeckLoading() {
   return (
     <div className="min-h-screen">
