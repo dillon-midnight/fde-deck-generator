@@ -1,3 +1,11 @@
+// RENDERING STRATEGY: Client-Side Rendering (intentional).
+// This page manages real-time Server-Sent Events via useDeckStreamContext()
+// — slides arrive one-by-one from the generation stream and the UI updates
+// on every event. You cannot server-render a real-time stream. The page
+// also handles two modes (streaming vs. saved deck) with shared component
+// state, which requires client-side hooks (useState, useEffect, useParams).
+// The sibling loading.tsx provides a Suspense fallback so navigation feels
+// instant while the client JS bundle downloads and hydrates.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,7 +17,7 @@ import { useDeckStreamContext } from "@/contexts/deck-stream-context";
 import type { Deck } from "@/lib/schemas";
 
 export default function DeckPage() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const router = useRouter();
   const params = useParams();
   const dealId = params.deal_id as string;
@@ -25,10 +33,6 @@ export default function DeckPage() {
   const needsFetch = !isStreamingRoute && !(ctx.result?.deal_id === dealId && ctx.slides.length > 0);
   const [fetching, setFetching] = useState(needsFetch);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/");
-  }, [status, router]);
 
   // Streaming mode: redirect to /generate if no active stream
   useEffect(() => {
@@ -72,14 +76,6 @@ export default function DeckPage() {
         setFetching(false);
       });
   }, [session, dealId, isStreamingRoute, contextHasDeck]);
-
-  if (status === "loading" || !session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    );
-  }
 
   // Derive the active deck from available sources
   let activeDeck: Deck | null = null;
