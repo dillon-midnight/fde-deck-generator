@@ -1,3 +1,7 @@
+// DEPRECATED: Superseded by /api/decks/generate-workflow — kept as fallback
+// during transition. The workflow path provides durable execution that
+// survives page refreshes and server restarts.
+
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { generateDeckStream } from "@/lib/generate-deck-stream";

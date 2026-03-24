@@ -1,3 +1,7 @@
+// DEPRECATED: Superseded by generate-deck-workflow.ts — kept as fallback
+// during transition. The workflow path provides durable execution that
+// survives page refreshes and server restarts.
+
 import { streamText, generateText, Output } from "ai";
 import { gateway } from "@ai-sdk/gateway";
 import { z } from "zod";

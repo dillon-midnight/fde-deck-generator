@@ -37,7 +37,7 @@ const PRESETS = [
 
 export function SignalForm() {
   const router = useRouter();
-  const { error, isStreaming, startStream } = useDeckStreamContext();
+  const { error, isStreaming, startGeneration } = useDeckStreamContext();
 
   const [company, setCompany] = useState("");
   const [industry, setIndustry] = useState("");
@@ -45,8 +45,9 @@ export function SignalForm() {
   const [useCases, setUseCases] = useState<string[]>([]);
   const [objections, setObjections] = useState<string[]>([]);
   const [tools, setTools] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
-  // If a stream is already in progress (user navigated back), show a message
+  // If a generation is already in progress (user navigated back), show a message
   if (isStreaming) {
     return (
       <div className="max-w-2xl space-y-4">
@@ -54,27 +55,29 @@ export function SignalForm() {
           <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           Generation in progress...
         </div>
-        <button
-          onClick={() => router.push("/deck/streaming")}
-          className="text-blue-600 hover:text-blue-700 font-medium text-sm cursor-pointer"
-        >
-          View deck in editor
-        </button>
       </div>
     );
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  // Navigate to /deck/{run_id} after starting the workflow.
+  // The run_id is in the URL so refreshing the page rehydrates from the DB.
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    startStream({
-      company,
-      industry,
-      pain_points: painPoints,
-      use_cases: useCases,
-      objections,
-      tools,
-    });
-    router.push("/deck/streaming");
+    setSubmitting(true);
+    try {
+      const { run_id } = await startGeneration({
+        company,
+        industry,
+        pain_points: painPoints,
+        use_cases: useCases,
+        objections,
+        tools,
+      });
+      router.push(`/deck/${run_id}`);
+    } catch {
+      // Error is surfaced via context state
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -179,9 +182,10 @@ export function SignalForm() {
 
       <button
         type="submit"
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer"
+        disabled={submitting}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 px-4 rounded-lg transition-colors cursor-pointer disabled:cursor-default"
       >
-        Generate deck
+        {submitting ? "Starting..." : "Generate deck"}
       </button>
     </form>
   );

@@ -1,14 +1,17 @@
-// RENDERING STRATEGY: Hybrid Server/Client split. This page is a Server Component
-// that handles two cases:
+// RENDERING STRATEGY: Three-case routing for deck pages.
 //
-// 1. Saved decks (deal_id !== "streaming") — rendered entirely on the server.
-//    The page queries the DB directly, eliminating the client-side fetch waterfall
-//    (load JS → hydrate → useEffect → fetch API → API queries DB → setState → render).
-//    Data is passed as props to the client DeckEditor component.
+// 1. run-* IDs (e.g., /deck/run-1234567890-abc123) — in-progress workflow run.
+//    Delegates to StreamingDeckView with the runId prop. The client component
+//    polls the server for status updates. Survives page refresh because the
+//    run_id is in the URL and state rehydrates from the DB.
 //
-// 2. Streaming decks (deal_id === "streaming") — delegates to StreamingDeckView,
-//    a Client Component that consumes SSE events via useDeckStreamContext().
-//    SSE requires a persistent browser connection, so this path must be client-rendered.
+// 2. "streaming" (legacy) — redirect to /generate. This was the old SSE path
+//    where all state lived in React memory. No longer used, but kept as a
+//    redirect so stale bookmarks don't 404.
+//
+// 3. Saved decks (e.g., /deck/deal-1234567890-abc123) — rendered entirely on
+//    the server. The page queries the DB directly, eliminating the client-side
+//    fetch waterfall.
 
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -27,9 +30,14 @@ export default async function DeckPage({
 }) {
   const { deal_id } = await params;
 
-  // Streaming path: delegate entirely to client component
+  // In-progress workflow run: delegate to client component with runId
+  if (deal_id.startsWith("run-")) {
+    return <StreamingDeckView runId={deal_id} />;
+  }
+
+  // Legacy SSE path: redirect to generate page
   if (deal_id === "streaming") {
-    return <StreamingDeckView />;
+    redirect("/generate");
   }
 
   // Saved deck path: server-render with direct DB access
