@@ -71,7 +71,7 @@ export function ExportButton({ deck, disabled }: ExportButtonProps) {
       <button
         onClick={handleExport}
         disabled={exporting || disabled}
-        className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer"
+        className="bg-green-600 enabled:hover:bg-green-700 disabled:opacity-50 disabled:cursor-default text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors cursor-pointer"
       >
         {exporting ? "Generating..." : "Download .pptx"}
       </button>

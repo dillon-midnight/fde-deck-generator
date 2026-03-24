@@ -37,7 +37,7 @@ const PRESETS = [
 
 export function SignalForm() {
   const router = useRouter();
-  const { error, isStreaming, startGeneration } = useDeckStreamContext();
+  const { error, startGeneration } = useDeckStreamContext();
 
   const [company, setCompany] = useState("");
   const [industry, setIndustry] = useState("");
@@ -46,18 +46,6 @@ export function SignalForm() {
   const [objections, setObjections] = useState<string[]>([]);
   const [tools, setTools] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-
-  // If a generation is already in progress (user navigated back), show a message
-  if (isStreaming) {
-    return (
-      <div className="max-w-2xl space-y-4">
-        <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-          <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          Generation in progress...
-        </div>
-      </div>
-    );
-  }
 
   // Navigate to /deck/{run_id} after starting the workflow.
   // The run_id is in the URL so refreshing the page rehydrates from the DB.

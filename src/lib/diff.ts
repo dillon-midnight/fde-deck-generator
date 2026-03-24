@@ -44,6 +44,9 @@ export function computeDiff(original: Deck, edited: Deck): DiffResult {
     const originalSlide = originalMap.get(num);
     if (!originalSlide) continue;
 
+    // User-editable content fields only. slide_number is an identifier (not
+    // content) and grounding_status is system-assigned metadata — neither
+    // represents a meaningful user edit.
     const fields = ["title", "talking_points", "features", "sources"] as const;
     let modified = false;
 
@@ -66,7 +69,9 @@ export function computeDiff(original: Deck, edited: Deck): DiffResult {
     }
   }
 
-  // Check reorder
+  // Check reorder — compare only slides present in both versions to isolate
+  // reordering from additions/deletions. A new slide appended at the end
+  // isn't a "reorder."
   const origOrder = original.slides.map((s) => s.slide_number);
   const editOrder = edited.slides.map((s) => s.slide_number);
   const commonOrig = origOrder.filter((n) => editedMap.has(n));

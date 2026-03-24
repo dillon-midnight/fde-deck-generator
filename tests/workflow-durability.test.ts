@@ -133,47 +133,26 @@ describe("workflow step DB state changes", () => {
     expect(update).toBeDefined();
   });
 
-  it("generateAllSlides updates status to 'generation'", async () => {
-    const { generateAllSlides } = await import(
+  it("generateAndGroundSlides sets generation then grounding status and appends slides", async () => {
+    const { generateAndGroundSlides } = await import(
       "../src/lib/generate-deck-workflow"
     );
 
-    await generateAllSlides(signals, mockChunks, [], "run-test-2");
+    const result = await generateAndGroundSlides(signals, mockChunks, [], "run-test-2");
 
-    const update = findCall("UPDATE workflow_runs", "generation");
-    expect(update).toBeDefined();
-  });
+    // Should have set generation status
+    const generationUpdate = findCall("UPDATE workflow_runs", "generation");
+    expect(generationUpdate).toBeDefined();
 
-  it("groundAndPersistSlide appends slide to workflow_runs.slides", async () => {
-    const { groundAndPersistSlide } = await import(
-      "../src/lib/generate-deck-workflow"
-    );
-
-    await groundAndPersistSlide(mockSlides[0], mockChunks, "run-test-3", 0, 2);
-
+    // Should have set grounding status
     const groundingUpdate = findCall("UPDATE workflow_runs", "grounding");
     expect(groundingUpdate).toBeDefined();
 
-    const slideAppend = findCall("slides = slides ||");
-    expect(slideAppend).toBeDefined();
-  });
-
-  it("slides array grows as grounding progresses", async () => {
-    const { groundAndPersistSlide } = await import(
-      "../src/lib/generate-deck-workflow"
-    );
-
-    await groundAndPersistSlide(mockSlides[0], mockChunks, "run-test-4", 0, 2);
-    const firstAppends = sqlCalls.filter((c) =>
+    // Should have appended each slide to DB
+    const slideAppends = sqlCalls.filter((c) =>
       c.strings.includes("slides = slides ||")
     );
-    expect(firstAppends.length).toBe(1);
-
-    await groundAndPersistSlide(mockSlides[1], mockChunks, "run-test-4", 1, 2);
-    const allAppends = sqlCalls.filter((c) =>
-      c.strings.includes("slides = slides ||")
-    );
-    expect(allAppends.length).toBe(2);
+    expect(slideAppends.length).toBe(result.length);
   });
 
   it("finalizePipelineRun inserts pipeline_runs and sets status to 'complete'", async () => {
