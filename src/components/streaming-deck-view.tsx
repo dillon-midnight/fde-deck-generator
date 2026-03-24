@@ -1,9 +1,12 @@
-// RENDERING STRATEGY: Client Component extracted from /deck/[deal_id]/page.tsx
-// to keep the page itself a Server Component. SSE streams (Server-Sent Events)
-// require client-side rendering — the browser holds open the connection and
-// pushes slide data into React state on each event. This component owns all
-// streaming logic so the parent page can server-render saved decks without
-// shipping any of this JS.
+// RENDERING STRATEGY: Client Component that polls server-authoritative state.
+//
+// The URL contains the run_id (e.g., /deck/run-123456-abc), so page refreshes
+// work: on mount, pollRun(runId) starts fetching from the DB-backed polling
+// endpoint and state rehydrates. When the workflow completes, we navigate to
+// the permanent /deck/{deal_id} URL.
+//
+// This replaces the old SSE-based approach where state lived entirely in
+// React memory and was lost on refresh.
 "use client";
 
 import { useEffect } from "react";
@@ -13,29 +16,45 @@ import { DeckEditor } from "@/components/deck-editor";
 import { useDeckStreamContext } from "@/contexts/deck-stream-context";
 import type { Deck } from "@/lib/schemas";
 
-export function StreamingDeckView() {
+interface StreamingDeckViewProps {
+  runId?: string;
+}
+
+export function StreamingDeckView({ runId }: StreamingDeckViewProps) {
   const router = useRouter();
   const ctx = useDeckStreamContext();
 
-  // Redirect to /generate if no active stream
+  // Start polling when mounted with a runId
   useEffect(() => {
-    if (!ctx.isStreaming && ctx.slides.length === 0 && !ctx.result) {
+    if (runId) {
+      ctx.pollRun(runId);
+    }
+    return () => {
+      ctx.stopPolling();
+    };
+    // Only run on mount / when runId changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId]);
+
+  // Redirect to /generate if no runId and no active state
+  useEffect(() => {
+    if (!runId && !ctx.isStreaming && ctx.slides.length === 0 && !ctx.result) {
       router.replace("/generate");
     }
-  }, [ctx.isStreaming, ctx.slides.length, ctx.result, router]);
+  }, [runId, ctx.isStreaming, ctx.slides.length, ctx.result, router]);
 
-  // Navigate to real URL when stream completes
+  // Navigate to permanent URL when workflow completes
   useEffect(() => {
     if (ctx.result) {
       router.replace(`/deck/${ctx.result.deal_id}`);
     }
   }, [ctx.result, router]);
 
-  // Build the active deck from stream state
+  // Build the active deck from poll state
   let activeDeck: Deck | null = null;
   if (ctx.slides.length > 0) {
     activeDeck = {
-      deal_id: "streaming",
+      deal_id: runId || "streaming",
       company: ctx.company || "",
       slides: ctx.slides,
     };
@@ -58,7 +77,7 @@ export function StreamingDeckView() {
         ) : !activeDeck ? (
           <div className="flex items-center gap-2 text-neutral-500">
             <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            Waiting for first slide...
+            {ctx.stageMessage || "Waiting for first slide..."}
           </div>
         ) : (
           <DeckEditor

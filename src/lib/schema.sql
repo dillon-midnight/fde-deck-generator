@@ -20,6 +20,20 @@ CREATE TABLE eval_tuples (
   timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE workflow_runs (
+  run_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  deal_id TEXT,
+  signals JSONB NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  status_message TEXT,
+  slides JSONB NOT NULL DEFAULT '[]'::jsonb,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX workflow_runs_user_status ON workflow_runs (user_id, status);
+
 CREATE TABLE pipeline_runs (
   id SERIAL PRIMARY KEY,
   deal_id TEXT NOT NULL UNIQUE,

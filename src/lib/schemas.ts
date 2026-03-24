@@ -39,3 +39,22 @@ export type StreamEvent =
   | { type: "slide"; slide: Slide }
   | { type: "error"; message: string }
   | { type: "complete"; deal_id: string; faithfulness_rate: number };
+
+export type WorkflowRunStatus =
+  | "pending"
+  | "retrieval"
+  | "generation"
+  | "grounding"
+  | "saving"
+  | "complete"
+  | "error";
+
+export interface WorkflowStatus {
+  run_id: string;
+  status: WorkflowRunStatus;
+  status_message: string | null;
+  slides: Slide[];
+  deal_id: string | null;
+  faithfulness_rate: number | null;
+  error: string | null;
+}
