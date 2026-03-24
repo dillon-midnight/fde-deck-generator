@@ -7,6 +7,12 @@ export interface ChunkResult {
   score: number;
 }
 
+// Two tables, two retrieval strategies:
+// - doc_chunks: product documentation chunks, searched by cosine similarity
+//   against the query embedding — returns the most relevant content.
+// - eval_tuples: historical generation examples for few-shot learning, ordered
+//   by recency (embedding not used — we want the most recent AE-reviewed
+//   examples, not the most semantically similar ones).
 export async function vectorSearch(
   queryEmbedding: number[],
   table: string,

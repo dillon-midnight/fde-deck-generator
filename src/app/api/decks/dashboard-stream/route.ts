@@ -112,7 +112,10 @@ export async function GET() {
       // Store cleanup refs so they can be called
       controller.enqueue(encoder.encode(": keepalive\n\n"));
 
-      // Override close behavior
+      // ReadableStream's start() has no onclose hook. Override controller.close
+      // so interval/timeout cleanup runs regardless of whether the stream closes
+      // from inside (no active runs) or outside (client disconnect, max duration).
+      // Without this, the interval would leak.
       const origClose = controller.close.bind(controller);
       controller.close = () => {
         clearInterval(interval);

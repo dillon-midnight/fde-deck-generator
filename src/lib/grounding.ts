@@ -111,7 +111,11 @@ export async function checkAndRegenerate(
     }
   }
 
-  // Final evaluation for status assignment
+  // Separate pass for final status assignment. The retry loop above may have
+  // improved slides, so we re-evaluate from scratch to assign definitive
+  // grounded/needs_review status. The duplicated URL pre-filter + LLM check
+  // is intentional: the first pass asks "should we regenerate?", this one
+  // asks "what's the final status?"
   let slidesFailedGrounding = 0;
   const groundedSet = new Set<number>();
 
@@ -153,15 +157,14 @@ export async function checkAndRegenerate(
   };
 }
 
-// groundSlide is the per-slide grounding function used by the streaming
-// pipeline. It operates on one slide at a time so results can be emitted
+// groundSlide is the per-slide grounding function used by the streaming/workflow
+// pipelines. It operates on one slide at a time so results can be emitted
 // to the client as they complete, enabling the progressive rendering UX.
 //
-// checkAndRegenerate (above) is a batch alternative designed for a future
-// non-streaming path where all slides are generated first and grounded in
-// a single pass. It is not wired into the current pipeline but is kept and
-// tested because the batch approach has better parallelism potential and
-// will be the right choice if we add a background re-grounding job.
+// checkAndRegenerate (above) is the batch alternative — it takes a full deck,
+// evaluates all slides, and re-generates failing ones in a loop. It's used by
+// the grounding tests and is available for batch re-grounding jobs where
+// per-slide streaming isn't needed.
 export async function groundSlide(
   slide: Slide,
   chunks: GroundingChunk[],

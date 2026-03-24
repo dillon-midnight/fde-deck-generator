@@ -1,6 +1,7 @@
-// DEPRECATED: Superseded by generate-deck-workflow.ts — kept as fallback
-// during transition. The workflow path provides durable execution that
-// survives page refreshes and server restarts.
+// LEGACY: Superseded by generate-deck-workflow.ts. The workflow path provides
+// durable execution that survives page refreshes and server restarts. This
+// module is kept because the SSE route (api/decks/generate-stream) still
+// exists as a fallback.
 
 import { streamText, generateText, Output } from "ai";
 import { gateway } from "@ai-sdk/gateway";
