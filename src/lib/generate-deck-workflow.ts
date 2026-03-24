@@ -6,14 +6,18 @@
 // crashes or the serverless function times out, the workflow resumes from the
 // last completed step rather than restarting from scratch.
 //
-// KEY TRADEOFF: The SSE streaming path (generate-deck-stream.ts) uses a
-// producer/consumer pattern where generation and grounding run concurrently.
-// That's not possible here because each 'use step' must complete and return
-// a serializable value before the next step begins. We lose that concurrency
-// but gain durability — the workflow survives page refreshes, deploys, and
-// crashes. Progressive UX is preserved because grounding steps run one at a
-// time and each appends to the DB, so the client sees slides appear during
-// the grounding phase via polling.
+// CONCURRENCY WITHIN A SINGLE STEP: Generation and grounding run concurrently
+// inside one 'use step' via a producer/consumer Promise.all — the same pattern
+// used in the SSE path (generate-deck-stream.ts). Grounding starts on slide 1
+// while the model is still generating slide 2, so the first grounded slide
+// appears in ~5-8s instead of waiting ~25s for all slides to generate first.
+// Each grounded slide is appended to the DB as it completes, so the client
+// sees progressive updates via polling.
+//
+// TRADEOFF: We lose per-slide retry boundaries. If the step crashes during
+// slide 5's grounding, slides 1-4 must be re-generated and re-grounded on
+// retry. This is acceptable because each grounding call is fast (~2-3s) and
+// total step time is well within serverless limits.
 //
 // DETERMINISTIC REPLAY: If the workflow resumes after a crash, completed steps
 // are replayed from the event log (their return values are replayed, not
@@ -105,10 +109,11 @@ export async function retrieveContext(
   return { signals, chunks, fewShotExamples };
 }
 
-// Step 2: Generate all slides using Claude Sonnet. The partialOutputStream
-// is consumed within this step to build the full slide array. We cannot emit
-// partial slides because 'use step' requires a complete serializable return value.
-export async function generateAllSlides(
+// Step 2: Generate all slides and ground them concurrently using a
+// producer/consumer pattern. The producer streams slides from Claude Sonnet
+// and pushes them to a queue; the consumer grounds each slide with Gemini
+// Flash and appends it to the DB. First grounded slide appears in ~5-8s.
+export async function generateAndGroundSlides(
   signals: Signals,
   chunks: GroundingChunk[],
   fewShotExamples: { signals: Signals; deck: { deal_id: string; company: string; slides: Slide[] }; diff?: unknown }[],
@@ -125,68 +130,27 @@ export async function generateAllSlides(
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(signals, chunks, fewShotExamples);
 
-  const result = streamText({
-    model: gateway(GENERATION_MODEL),
-    providerOptions: GENERATION_PROVIDER_OPTIONS,
-    output: Output.object({
-      schema: z.object({ slides: z.array(SlideSchema) }),
-    }),
-    system: systemPrompt,
-    prompt: userPrompt,
-    maxOutputTokens: 4096,
-  });
+  // Producer/consumer queue mechanism
+  const slideQueue: Slide[] = [];
+  let producerDone = false;
+  let resolveWait: (() => void) | null = null;
 
-  // Consume the stream to completion within this step
-  const slides: Slide[] = [];
-  let emittedCount = 0;
-
-  for await (const partial of result.partialOutputStream) {
-    if (!partial?.slides) continue;
-    const completeCount = Math.max(0, partial.slides.length - 1);
-    for (let i = emittedCount; i < completeCount; i++) {
-      const s = partial.slides[i];
-      if (isCompleteSlide(s)) {
-        slides.push(s);
-      }
-    }
-    emittedCount = completeCount;
+  function notify() {
+    resolveWait?.();
   }
 
-  const finalOutput = await result.output;
-  if (finalOutput?.slides) {
-    for (let i = emittedCount; i < finalOutput.slides.length; i++) {
-      const s = finalOutput.slides[i];
-      if (isCompleteSlide(s)) {
-        slides.push(s);
-      }
+  async function waitForSlide(): Promise<Slide | null> {
+    while (slideQueue.length === 0) {
+      if (producerDone) return null;
+      await new Promise<void>((r) => {
+        resolveWait = r;
+      });
+      resolveWait = null;
     }
+    return slideQueue.shift()!;
   }
 
-  return slides;
-}
-
-// Step 3 (called N times, once per slide): Ground a single slide and
-// append it to the workflow_runs.slides JSONB array. Each call is its own
-// step so a crash mid-grounding only loses one slide's worth of work.
-export async function groundAndPersistSlide(
-  slide: Slide,
-  chunks: GroundingChunk[],
-  runId: string,
-  slideIndex: number,
-  totalSlides: number
-) {
-  "use step";
-
-  await sql`
-    UPDATE workflow_runs
-    SET status = 'grounding',
-        status_message = ${"Grounding slide " + (slideIndex + 1) + " of " + totalSlides + "..."},
-        updated_at = NOW()
-    WHERE run_id = ${runId}
-  `;
-
-  const systemPrompt = buildSystemPrompt();
-
+  // Grounding callbacks
   const evaluateSlide = async (s: Slide) => {
     const { output } = await generateText({
       model: gateway(GROUNDING_MODEL),
@@ -218,20 +182,102 @@ export async function groundAndPersistSlide(
     return output!;
   };
 
-  const grounded = await groundSlide(slide, chunks, {
-    evaluateSlide,
-    regenerateSlide,
-  });
+  const groundedSlides: Slide[] = [];
+  let totalSlides = 0;
 
-  // Append the grounded slide to the workflow_runs.slides array
-  await sql`
-    UPDATE workflow_runs
-    SET slides = slides || ${JSON.stringify([grounded])}::jsonb,
-        updated_at = NOW()
-    WHERE run_id = ${runId}
-  `;
+  await Promise.all([
+    // PRODUCER: Claude Sonnet via streamText
+    (async () => {
+      try {
+        const result = streamText({
+          model: gateway(GENERATION_MODEL),
+          providerOptions: GENERATION_PROVIDER_OPTIONS,
+          output: Output.object({
+            schema: z.object({ slides: z.array(SlideSchema) }),
+          }),
+          system: systemPrompt,
+          prompt: userPrompt,
+          maxOutputTokens: 4096,
+        });
 
-  return grounded;
+        let emittedCount = 0;
+        for await (const partial of result.partialOutputStream) {
+          if (!partial?.slides) continue;
+          const completeCount = Math.max(0, partial.slides.length - 1);
+          for (let i = emittedCount; i < completeCount; i++) {
+            const s = partial.slides[i];
+            if (isCompleteSlide(s)) {
+              slideQueue.push(s);
+              notify();
+            }
+          }
+          emittedCount = completeCount;
+        }
+
+        // Final output — push any remaining slides
+        const finalOutput = await result.output;
+        if (finalOutput?.slides) {
+          for (let i = emittedCount; i < finalOutput.slides.length; i++) {
+            const s = finalOutput.slides[i];
+            if (isCompleteSlide(s)) {
+              slideQueue.push(s);
+              notify();
+            }
+          }
+          totalSlides = finalOutput.slides.length;
+        }
+      } finally {
+        producerDone = true;
+        notify();
+      }
+    })(),
+
+    // CONSUMER: Gemini Flash grounding, serial
+    (async () => {
+      let slideIndex = 0;
+      while (true) {
+        const slide = await waitForSlide();
+        if (slide === null) break;
+
+        // Update status to grounding on first slide
+        if (slideIndex === 0) {
+          await sql`
+            UPDATE workflow_runs
+            SET status = 'grounding',
+                status_message = 'Grounding slide 1...',
+                updated_at = NOW()
+            WHERE run_id = ${runId}
+          `;
+        } else {
+          await sql`
+            UPDATE workflow_runs
+            SET status_message = ${"Grounding slide " + (slideIndex + 1) + "..."},
+                updated_at = NOW()
+            WHERE run_id = ${runId}
+          `;
+        }
+
+        const grounded = await groundSlide(slide, chunks, {
+          evaluateSlide,
+          regenerateSlide,
+        });
+
+        groundedSlides.push(grounded);
+
+        // Append grounded slide to DB
+        await sql`
+          UPDATE workflow_runs
+          SET slides = slides || ${JSON.stringify([grounded])}::jsonb,
+              updated_at = NOW()
+          WHERE run_id = ${runId}
+        `;
+
+        slideIndex++;
+      }
+    })(),
+  ]);
+
+  return groundedSlides;
 }
 
 // Final step: Create the pipeline_runs row (same schema as SSE path) and

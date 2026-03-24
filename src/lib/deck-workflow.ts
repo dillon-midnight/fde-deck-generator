@@ -11,8 +11,7 @@
 
 import {
   retrieveContext,
-  generateAllSlides,
-  groundAndPersistSlide,
+  generateAndGroundSlides,
   finalizePipelineRun,
 } from "./generate-deck-workflow";
 
@@ -29,27 +28,13 @@ export async function deckGenerationWorkflow(
     runId
   );
 
-  // Step 2: Generate all slides (consumes stream to completion)
-  const slides = await generateAllSlides(
+  // Step 2: Generate and ground slides concurrently (producer/consumer)
+  const groundedSlides = await generateAndGroundSlides(
     signals,
     chunks,
     fewShotExamples,
     runId
   );
-
-  // Steps 3..N: Ground each slide individually. Each step persists the
-  // grounded slide to workflow_runs.slides so the client sees progress.
-  const groundedSlides = [];
-  for (let i = 0; i < slides.length; i++) {
-    const grounded = await groundAndPersistSlide(
-      slides[i],
-      chunks,
-      runId,
-      i,
-      slides.length
-    );
-    groundedSlides.push(grounded);
-  }
 
   // Final step: Persist to pipeline_runs, mark workflow complete
   const result = await finalizePipelineRun(
