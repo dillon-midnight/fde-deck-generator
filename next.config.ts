@@ -8,7 +8,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://*.googleusercontent.com",
       // connect-src is restricted to 'self' only. PPTX export is generated
       // entirely client-side — no external API calls are made from the browser.
       "connect-src 'self'",
