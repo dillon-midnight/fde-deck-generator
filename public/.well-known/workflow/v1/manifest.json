@@ -16,11 +16,8 @@
       "finalizePipelineRun": {
         "stepId": "step//./src/lib/generate-deck-workflow//finalizePipelineRun"
       },
-      "generateAllSlides": {
-        "stepId": "step//./src/lib/generate-deck-workflow//generateAllSlides"
-      },
-      "groundAndPersistSlide": {
-        "stepId": "step//./src/lib/generate-deck-workflow//groundAndPersistSlide"
+      "generateAndGroundSlides": {
+        "stepId": "step//./src/lib/generate-deck-workflow//generateAndGroundSlides"
       },
       "retrieveContext": {
         "stepId": "step//./src/lib/generate-deck-workflow//retrieveContext"

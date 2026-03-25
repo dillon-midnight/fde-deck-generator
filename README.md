@@ -51,7 +51,9 @@ The app has noteworthy approaches to the following:
 
 ### Fallbacks
 
-The app keeps it simple for now and just uses AI Gateway's native model fallback feature.
+- **Model fallbacks (AI Gateway):** Provider outage on generation or grounding degrades to the next model in the fallback chain via AI Gateway's native model fallback feature.
+- **Execution fallbacks (Workflows):** If a step fails or the serverless function crashes, completed steps replay from the event log and only the failed step retries. The user doesn't re-submit.
+- **Legacy SSE route:** The pre-workflow streaming path (`/api/decks/generate-stream`) still exists as a fallback during transition.
 
 ### Safety
 
@@ -65,8 +67,9 @@ Every route in the app is either personalized, auth-gated, or real-time — so s
 - **`/` (login)** — A Server Component with a static shell and zero client JS except for the `SignInButton` island. Authenticated users are server-redirected before any HTML is sent, so there's no layout shift from a late client-side redirect.
 - **`/dashboard`** — Dynamic SSR with a Suspense boundary and `loading.tsx` skeleton. The server-side DB query eliminates a client fetch waterfall, and the streamed skeleton gives the browser something to paint immediately, improving LCP on slow connections.
 - **`/generate`** — Server-rendered shell with `SignalForm` as the only Client Component (it needs form state and streaming context). Keeping the shell server-rendered means the page is interactive faster since the client bundle is limited to the form island.
+- **`/deck/[deal_id]` (`run-*` IDs)** — `StreamingDeckView` polls `/api/decks/workflow-status` every 2s for progressive updates as workflow steps complete. Survives page refresh because the `run_id` is in the URL and state rehydrates from the DB.
+- **`/deck/[deal_id]` (`"streaming"`)** — Legacy redirect to `/generate`. This was the old SSE streaming path before the workflow migration.
 - **`/deck/[deal_id]` (saved deck)** — Dynamic SSR with a direct DB query in the Server Component. Data is passed as props to the `DeckEditor` Client Component, so the client never fetches — it hydrates with the deck already in hand.
-- **`/deck/[deal_id]` (streaming)** — Client-side rendering via SSE in the `StreamingDeckView` Client Component. SSE requires a persistent browser connection, so server rendering isn't an option here — the client must own the connection lifecycle.
 
 ## Production Considerations
 
@@ -83,12 +86,13 @@ Every route in the app is either personalized, auth-gated, or real-time — so s
 
 ### Reliability
 
+- Workflow step boundaries provide automatic retry — if a step fails, completed steps replay from cache and only the failed step re-executes
 - AI Gateway model fallbacks (`models: [...]` in `providerOptions`) for both generation and grounding paths
 - Upsert logic in the crawl cron (`WHERE NOT EXISTS`) to prevent duplicate chunk insertion
-- Abort controller on streaming sessions to cancel in-flight requests on unmount
+- Abort controller on streaming sessions to cancel in-flight requests on unmount (legacy SSE path)
 - Graceful partial stream handling — slides are emitted as they complete, not waiting for full output
 - Timeout on fetch requests during crawl (`AbortSignal.timeout(10000)`)
-- Producer/consumer pattern with slide queue so grounding runs concurrently with generation
+- Producer/consumer pattern with slide queue so grounding runs concurrently with generation, now running inside a workflow step
 
 ### Failure modes
 
@@ -119,9 +123,21 @@ AI Gateway's `providerOptions` model fallback chains are configured for both pat
 
 AI Gateway's built-in prompt caching is not implemented yet. Deck generation is low-repetition, and every prospect and chunk set is different, so cache hit rates would be negligible.
 
+### Vercel Workflows
+
+Deck generation runs as a durable three-step workflow: `retrieveContext` → `generateAndGroundSlides` → `finalizePipelineRun`. Each step is marked with `"use step"` so Vercel can checkpoint and retry individual steps independently.
+
+**Crash recovery:** If the serverless function crashes mid-step, completed steps replay from the event log (cached return values) and only the in-flight step retries. The user doesn't need to re-submit.
+
+**Survives page refresh:** The old SSE path lost all state on tab close or refresh. Workflows persist progress to `workflow_runs` in the DB, and the `run_id` in the URL means the page rehydrates from the DB on reload.
+
+**Progressive rendering within a single step:** Step 2 runs a producer/consumer `Promise.all` — Claude Sonnet streams slides while Gemini Flash grounds them concurrently. Each grounded slide is appended to the DB row as it completes, and the client polls `/api/decks/workflow-status` every 2s to pick them up. The UX feels like streaming even though the underlying transport is polling.
+
+**Dashboard live updates:** A separate SSE endpoint (`/api/decks/dashboard-stream`) polls `workflow_runs` every 2s so the dashboard shows in-progress runs with live slide counts.
+
 ### Fluid Compute
 
-The streaming generation route is a natural fit for Fluid Compute. The function spends most of its wall-clock time waiting on I/O (embedding calls, vector search, LLM streaming, grounding eval) not executing code. Fluid Compute bills only during execution, so the cost per deck scales with actual work, not wait time.
+The workflow route is a natural fit for Fluid Compute. Each workflow step spends most of its wall-clock time waiting on I/O (embedding calls, vector search, LLM streaming, grounding eval) not executing code. Fluid Compute bills only during execution, so the cost per deck scales with actual work, not wait time.
 
 ### Vercel Cron
 
