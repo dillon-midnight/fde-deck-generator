@@ -57,4 +57,5 @@ export interface WorkflowStatus {
   deal_id: string | null;
   faithfulness_rate: number | null;
   error: string | null;
+  workflow_run_id: string | null;
 }

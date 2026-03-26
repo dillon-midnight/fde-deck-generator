@@ -53,6 +53,7 @@ The app has noteworthy approaches to the following:
 
 - **Model fallbacks (AI Gateway):** Provider outage on generation or grounding degrades to the next model in the fallback chain via AI Gateway's native model fallback feature.
 - **Execution fallbacks (Workflows):** If a step fails or the serverless function crashes, completed steps replay from the event log and only the failed step retries. The user doesn't re-submit.
+- **Stream fallbacks:** The stream endpoint falls back to the DB-backed status endpoint for initial rehydration and if the stream connection fails after max retries (exponential backoff, 3 attempts).
 - **Legacy SSE route:** The pre-workflow streaming path (`/api/decks/generate-stream`) still exists as a fallback during transition.
 
 ### Safety
@@ -67,7 +68,7 @@ Every route in the app is either personalized, auth-gated, or real-time — so s
 - **`/` (login)** — A Server Component with a static shell and zero client JS except for the `SignInButton` island. Authenticated users are server-redirected before any HTML is sent, so there's no layout shift from a late client-side redirect.
 - **`/dashboard`** — Dynamic SSR with a Suspense boundary and `loading.tsx` skeleton. The server-side DB query eliminates a client fetch waterfall, and the streamed skeleton gives the browser something to paint immediately, improving LCP on slow connections.
 - **`/generate`** — Server-rendered shell with `SignalForm` as the only Client Component (it needs form state and streaming context). Keeping the shell server-rendered means the page is interactive faster since the client bundle is limited to the form island.
-- **`/deck/[deal_id]` (`run-*` IDs)** — `StreamingDeckView` polls `/api/decks/workflow-status` every 2s for progressive updates as workflow steps complete. Survives page refresh because the `run_id` is in the URL and state rehydrates from the DB.
+- **`/deck/[deal_id]` (`run-*` IDs)** — `StreamingDeckView` consumes a native workflow stream via `/api/decks/workflow-stream` for real-time updates as slides are grounded. Reconnects on refresh with `startIndex` after rehydrating the DB snapshot from `/api/decks/workflow-status`.
 - **`/deck/[deal_id]` (`"streaming"`)** — Legacy redirect to `/generate`. This was the old SSE streaming path before the workflow migration.
 - **`/deck/[deal_id]` (saved deck)** — Dynamic SSR with a direct DB query in the Server Component. Data is passed as props to the `DeckEditor` Client Component, so the client never fetches — it hydrates with the deck already in hand.
 
@@ -90,7 +91,7 @@ Every route in the app is either personalized, auth-gated, or real-time — so s
 - AI Gateway model fallbacks (`models: [...]` in `providerOptions`) for both generation and grounding paths
 - Upsert logic in the crawl cron (`WHERE NOT EXISTS`) to prevent duplicate chunk insertion
 - Abort controller on streaming sessions to cancel in-flight requests on unmount (legacy SSE path)
-- Graceful partial stream handling — slides are emitted as they complete, not waiting for full output
+- Graceful partial stream handling — slides are written to the workflow stream and DB as they complete, not waiting for full output
 - Timeout on fetch requests during crawl (`AbortSignal.timeout(10000)`)
 - Producer/consumer pattern with slide queue so grounding runs concurrently with generation, now running inside a workflow step
 
@@ -131,7 +132,7 @@ Deck generation runs as a durable three-step workflow: `retrieveContext` → `ge
 
 **Survives page refresh:** The old SSE path lost all state on tab close or refresh. Workflows persist progress to `workflow_runs` in the DB, and the `run_id` in the URL means the page rehydrates from the DB on reload.
 
-**Progressive rendering within a single step:** Step 2 runs a producer/consumer `Promise.all` — Claude Sonnet streams slides while Gemini Flash grounds them concurrently. Each grounded slide is appended to the DB row as it completes, and the client polls `/api/decks/workflow-status` every 2s to pick them up. The UX feels like streaming even though the underlying transport is polling.
+**Progressive rendering within a single step:** Step 2 runs a producer/consumer `Promise.all` — Claude Sonnet streams slides while Gemini Flash grounds them concurrently. Each grounded slide is written to both the DB (for persistence/dashboard) and a native workflow stream via `getWritable()` (for real-time transport). The client consumes the stream via `getRun().getReadable()` in a dedicated SSE endpoint (`/api/decks/workflow-stream`). The Redis-backed durable stream supports reconnection via `startIndex`, so page refreshes rehydrate from the DB snapshot then resume the stream from where it left off.
 
 **Dashboard live updates:** A separate SSE endpoint (`/api/decks/dashboard-stream`) polls `workflow_runs` every 2s so the dashboard shows in-progress runs with live slide counts.
 

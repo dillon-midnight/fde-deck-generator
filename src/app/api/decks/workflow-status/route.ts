@@ -1,12 +1,13 @@
-// Polling endpoint for workflow run status.
+// Rehydration endpoint for workflow run status.
 //
-// The client polls this endpoint every ~2s from /deck/{run_id} to get
-// the current state of a workflow run. This is intentionally polling
-// rather than SSE because:
-// 1. The whole point of this migration is durability — SSE connections
-//    break on refresh. Polling + URL is the simplest refresh-safe pattern.
-// 2. The query hits the workflow_runs primary key — a single indexed
-//    lookup on Neon, ~1-2ms. Polling at 2s intervals is negligible load.
+// Serves two roles:
+// 1. One-time rehydration on page refresh — the client fetches the current
+//    DB snapshot (slides, status, workflow_run_id) then opens the native
+//    workflow stream from where the snapshot left off (startIndex).
+// 2. Fallback if the stream connection fails after max retries.
+//
+// No longer the primary polling endpoint — the client consumes a native
+// workflow stream via /api/decks/workflow-stream for real-time updates.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT run_id, status, status_message, slides, deal_id, error
+    SELECT run_id, status, status_message, slides, deal_id, error, workflow_run_id
     FROM workflow_runs
     WHERE run_id = ${runId}
   `;
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
     deal_id: row.deal_id || null,
     faithfulness_rate: faithfulnessRate,
     error: row.error || null,
+    workflow_run_id: row.workflow_run_id || null,
   };
 
   return NextResponse.json(response);
