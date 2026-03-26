@@ -6,13 +6,20 @@
 // crashes or the serverless function times out, the workflow resumes from the
 // last completed step rather than restarting from scratch.
 //
+// DUAL-WRITE PATTERN: Each step writes to both the DB (for persistence and
+// dashboard queries) and the workflow's native streams via getWritable() (for
+// real-time transport to the client). The "slides" namespace carries grounded
+// slides; the "status" namespace carries stage transitions. The client consumes
+// these via getRun().getReadable() in the stream endpoint. releaseLock() must
+// be called after each write() since the SDK enforces single-writer semantics.
+//
 // CONCURRENCY WITHIN A SINGLE STEP: Generation and grounding run concurrently
 // inside one 'use step' via a producer/consumer Promise.all — the same pattern
 // used in the SSE path (generate-deck-stream.ts). Grounding starts on slide 1
 // while the model is still generating slide 2, so the first grounded slide
 // appears in ~5-8s instead of waiting ~25s for all slides to generate first.
-// Each grounded slide is appended to the DB as it completes, so the client
-// sees progressive updates via polling.
+// Each grounded slide is written to both the DB and the workflow stream as it
+// completes.
 //
 // TRADEOFF: We lose per-slide retry boundaries. If the step crashes during
 // slide 5's grounding, slides 1-4 must be re-generated and re-grounded on
@@ -45,6 +52,7 @@ import { groundSlide, type GroundingChunk } from "./grounding";
 import { type ChunkResult } from "./rag";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts";
 import { sql } from "./db";
+import { getWritable } from "workflow";
 
 function isCompleteSlide(s: unknown): s is Slide {
   return (
@@ -68,11 +76,16 @@ export async function retrieveContext(
 ) {
   "use step";
 
+  const statusWritable = getWritable<{ status: string; message: string }>({ namespace: "status" });
+
   await sql`
     UPDATE workflow_runs
     SET status = 'retrieval', status_message = 'Retrieving product knowledge...', updated_at = NOW()
     WHERE run_id = ${runId}
   `;
+  const sw = statusWritable.getWriter();
+  await sw.write({ status: "retrieval", message: "Retrieving product knowledge..." });
+  sw.releaseLock();
 
   const signals = SignalsSchema.parse(rawSignals);
   if (injectionDetected(signals)) {
@@ -121,11 +134,19 @@ export async function generateAndGroundSlides(
 ) {
   "use step";
 
+  const slidesWritable = getWritable<Slide>({ namespace: "slides" });
+  const statusWritable = getWritable<{ status: string; message: string }>({ namespace: "status" });
+
   await sql`
     UPDATE workflow_runs
     SET status = 'generation', status_message = 'Generating slides...', updated_at = NOW()
     WHERE run_id = ${runId}
   `;
+  {
+    const sw = statusWritable.getWriter();
+    await sw.write({ status: "generation", message: "Generating slides..." });
+    sw.releaseLock();
+  }
 
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(signals, chunks, fewShotExamples);
@@ -240,6 +261,7 @@ export async function generateAndGroundSlides(
         if (slide === null) break;
 
         // Update status to grounding on first slide
+        const groundingMsg = `Grounding slide ${slideIndex + 1}...`;
         if (slideIndex === 0) {
           await sql`
             UPDATE workflow_runs
@@ -251,10 +273,15 @@ export async function generateAndGroundSlides(
         } else {
           await sql`
             UPDATE workflow_runs
-            SET status_message = ${"Grounding slide " + (slideIndex + 1) + "..."},
+            SET status_message = ${groundingMsg},
                 updated_at = NOW()
             WHERE run_id = ${runId}
           `;
+        }
+        {
+          const sw = statusWritable.getWriter();
+          await sw.write({ status: "grounding", message: groundingMsg });
+          sw.releaseLock();
         }
 
         const grounded = await groundSlide(slide, chunks, {
@@ -272,10 +299,24 @@ export async function generateAndGroundSlides(
           WHERE run_id = ${runId}
         `;
 
+        // Write grounded slide to workflow stream
+        {
+          const sw = slidesWritable.getWriter();
+          await sw.write(grounded);
+          sw.releaseLock();
+        }
+
         slideIndex++;
       }
     })(),
   ]);
+
+  // Close the slides stream — status stream stays open for finalizePipelineRun
+  {
+    const sw = slidesWritable.getWriter();
+    await sw.close();
+    sw.releaseLock();
+  }
 
   return groundedSlides;
 }
@@ -291,11 +332,18 @@ export async function finalizePipelineRun(
 ) {
   "use step";
 
+  const statusWritable = getWritable<{ status: string; message: string; deal_id?: string; faithfulness_rate?: number }>({ namespace: "status" });
+
   await sql`
     UPDATE workflow_runs
     SET status = 'saving', status_message = 'Saving results...', updated_at = NOW()
     WHERE run_id = ${runId}
   `;
+  {
+    const sw = statusWritable.getWriter();
+    await sw.write({ status: "saving", message: "Saving results..." });
+    sw.releaseLock();
+  }
 
   const dealId = `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const totalSlides = groundedSlides.length;
@@ -337,6 +385,14 @@ export async function finalizePipelineRun(
         updated_at = NOW()
     WHERE run_id = ${runId}
   `;
+
+  // Write terminal status and close the stream
+  {
+    const sw = statusWritable.getWriter();
+    await sw.write({ status: "complete", message: "Done", deal_id: dealId, faithfulness_rate: faithfulnessRate });
+    await sw.close();
+    sw.releaseLock();
+  }
 
   return { dealId, faithfulnessRate };
 }

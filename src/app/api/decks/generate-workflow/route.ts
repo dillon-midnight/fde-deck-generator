@@ -2,9 +2,12 @@
 //
 // POST handler creates a workflow_runs row and starts the workflow.
 // The run_id is returned to the client immediately — the client navigates
-// to /deck/{run_id} and polls for progress. The workflow body executes
-// durably on the server: if the function crashes or redeploys, it resumes
-// from the last completed step.
+// to /deck/{run_id} and consumes a native workflow stream for real-time
+// updates. The workflow body executes durably on the server: if the function
+// crashes or redeploys, it resumes from the last completed step.
+//
+// start() returns a Run object whose runId (the workflow platform's internal
+// ID) is stored in the DB so the stream endpoint can call getRun() later.
 //
 // The workflow function is defined in a separate file (deck-workflow.ts)
 // because it runs in a sandboxed environment that cannot import Node.js
@@ -49,9 +52,20 @@ export async function POST(req: NextRequest) {
     VALUES (${runId}, ${session.user.id}, ${JSON.stringify(body)}, 'pending', 'Starting...')
   `;
 
-  // Start the workflow — returns immediately, workflow executes durably
+  // Start the workflow — returns immediately, workflow executes durably.
+  // The returned Run object contains the workflow platform's internal runId,
+  // which we store so the stream endpoint can call getRun() to reconnect.
   try {
-    await start(deckGenerationWorkflow, [runId, body, Date.now()]);
+    const run = await start(deckGenerationWorkflow, [runId, body, Date.now()]);
+    try {
+      await sql`
+        UPDATE workflow_runs SET workflow_run_id = ${run.runId}, updated_at = NOW()
+        WHERE run_id = ${runId}
+      `;
+    } catch {
+      // Non-fatal: stream endpoint won't work but DB polling fallback handles it
+      console.error("Failed to store workflow_run_id for", runId);
+    }
   } catch (err) {
     // If workflow start fails, update the row so the client sees the error
     await sql`

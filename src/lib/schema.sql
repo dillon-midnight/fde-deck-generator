@@ -24,6 +24,7 @@ CREATE TABLE workflow_runs (
   run_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   deal_id TEXT,
+  workflow_run_id TEXT,
   signals JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   status_message TEXT,

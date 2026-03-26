@@ -1,12 +1,9 @@
-// RENDERING STRATEGY: Client Component that polls server-authoritative state.
+// RENDERING STRATEGY: Client Component that consumes a native workflow stream.
 //
 // The URL contains the run_id (e.g., /deck/run-123456-abc), so page refreshes
-// work: on mount, pollRun(runId) starts fetching from the DB-backed polling
-// endpoint and state rehydrates. When the workflow completes, we navigate to
-// the permanent /deck/{deal_id} URL.
-//
-// This replaces the old SSE-based approach where state lived entirely in
-// React memory and was lost on refresh.
+// work: on mount, connectToStream(runId) fetches a DB snapshot for rehydration,
+// then opens a native workflow stream for real-time slide and status updates.
+// When the workflow completes, we navigate to the permanent /deck/{deal_id} URL.
 "use client";
 
 import { useEffect } from "react";
@@ -24,13 +21,13 @@ export function StreamingDeckView({ runId }: StreamingDeckViewProps) {
   const router = useRouter();
   const ctx = useDeckStreamContext();
 
-  // Start polling when mounted with a runId
+  // Connect to stream when mounted with a runId
   useEffect(() => {
     if (runId) {
-      ctx.pollRun(runId);
+      ctx.connectToStream(runId);
     }
     return () => {
-      ctx.stopPolling();
+      ctx.disconnect();
     };
     // Only run on mount / when runId changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,7 +47,7 @@ export function StreamingDeckView({ runId }: StreamingDeckViewProps) {
     }
   }, [ctx.result, router]);
 
-  // Build the active deck from poll state
+  // Build the active deck from stream state
   let activeDeck: Deck | null = null;
   if (ctx.slides.length > 0) {
     activeDeck = {
