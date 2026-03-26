@@ -134,7 +134,7 @@ Deck generation runs as a durable three-step workflow: `retrieveContext` → `ge
 
 **Progressive rendering within a single step:** Step 2 runs a producer/consumer `Promise.all` — Claude Sonnet streams slides while Gemini Flash grounds them concurrently. Each grounded slide is written to both the DB (for persistence/dashboard) and a native workflow stream via `getWritable()` (for real-time transport). The client consumes the stream via `getRun().getReadable()` in a dedicated SSE endpoint (`/api/decks/workflow-stream`). The Redis-backed durable stream supports reconnection via `startIndex`, so page refreshes rehydrate from the DB snapshot then resume the stream from where it left off.
 
-**Dashboard live updates:** A separate SSE endpoint (`/api/decks/dashboard-stream`) polls `workflow_runs` every 2s so the dashboard shows in-progress runs with live slide counts.
+**Dashboard live updates:** A separate SSE endpoint (`/api/decks/dashboard-stream`) multiplexes native Workflow durable streams from all active runs into a single SSE response, pushing live slide counts and status transitions as they happen rather than on a polling interval.
 
 ### Fluid Compute
 
