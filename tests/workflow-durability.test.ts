@@ -101,6 +101,16 @@ vi.mock("@ai-sdk/gateway", () => ({
   gateway: vi.fn((modelId: string) => ({ _modelId: modelId })),
 }));
 
+vi.mock("workflow", () => ({
+  getWritable: vi.fn(() => ({
+    getWriter: () => ({
+      write: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      releaseLock: vi.fn(),
+    }),
+  })),
+}));
+
 const signals = {
   company: "Test Co",
   industry: "Tech",
